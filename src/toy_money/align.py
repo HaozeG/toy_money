@@ -60,3 +60,24 @@ def align_series(
         return df.assign(t=pd.Series(dtype=int))
     df["t"] = df["year"].astype(int) - df["country"].map(alignment.anchors).astype(int)
     return df.sort_values(["country", "t"]).reset_index(drop=True)
+
+
+def apply_comparison_basis(df: pd.DataFrame, compare_as: str) -> pd.DataFrame:
+    """Put an aligned frame onto the basis on which cross-country comparison is
+    meaningful for its indicator (see `Series.compare_as`).
+
+    - "level" / "slope": returned unchanged (slope handling is the caller's job).
+    - "indexed_to_anchor": rescale each country so its value at t=0 — or the
+      observation nearest t=0 — is 100, cancelling any provider index base.
+    """
+    if compare_as != "indexed_to_anchor" or df.empty:
+        return df
+    out = df.copy()
+    for country, g in df.groupby("country"):
+        base_row = g.iloc[(g["t"].abs()).argmin()]
+        base = base_row["value"]
+        if base:
+            out.loc[out["country"] == country, "value"] = (
+                out.loc[out["country"] == country, "value"] / base * 100.0
+            )
+    return out

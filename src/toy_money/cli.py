@@ -10,6 +10,7 @@ from pathlib import Path
 
 from . import datastore, sources
 from .align import resolve_alignment
+from .analysis import ANALYZERS
 from .config import DATA_DIR, ARTIFACTS_DIR, DEFAULT_ANCHOR, SERIES
 from .report import build_report
 
@@ -113,8 +114,8 @@ def _cmd_build(args: argparse.Namespace) -> int:
         return 2
     out = Path(args.out) if args.out else (ARTIFACTS_DIR / "china_japan.html")
     try:
-        path = build_report(alignment, out)
-    except RuntimeError as exc:
+        path = build_report(alignment, out, method=args.method)
+    except (RuntimeError, KeyError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
     print(f"wrote {path}")
@@ -141,6 +142,12 @@ def main(argv: list[str] | None = None) -> int:
     pb.add_argument("--anchor-jpn", type=int, help="explicit Japan anchor year")
     pb.add_argument("--anchor-chn", type=int, help="explicit China anchor year")
     pb.add_argument("--out", help="output HTML path")
+    pb.add_argument(
+        "--method",
+        default="path_overlap",
+        choices=sorted(ANALYZERS),
+        help="analysis method for the stated conclusion (default: %(default)s)",
+    )
     pb.set_defaults(func=_cmd_build)
 
     pp = sub.add_parser(

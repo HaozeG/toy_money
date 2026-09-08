@@ -21,6 +21,7 @@ uv run toy-money pull-cache              # download cache from the refresh-data 
 uv run toy-money build                   # render artifacts/china_japan.html
 uv run toy-money build --anchor workingage_peak     # alternate alignment
 uv run toy-money build --anchor-jpn 1991 --anchor-chn 2021   # explicit anchors
+uv run toy-money build --method path_overlap        # pick the analysis method
 uv run pytest -q                         # all tests
 uv run pytest tests/test_align.py::test_align_shifts_to_years_since_anchor
 ```
@@ -52,11 +53,15 @@ have never seen a live response. BIS is most likely to need fixes.
 ## Architecture
 
 Pipeline: `sources/*` fetch → `datastore` caches as parquet → `align` transforms →
-`report` renders one self-contained HTML file.
+`analysis` states the conclusion → `report` renders one self-contained HTML file.
 
 - **`config.py` is the single source of truth.** `SERIES` (the indicator table) and
   `ANCHOR_PRESETS` live here. Add an indicator by appending a `Series(...)` row, not by
-  touching the pipeline.
+  touching the pipeline. Each `Series` also declares `compare_as` — `"level"` (ratios/
+  rates, natively comparable), `"indexed_to_anchor"` (index numbers on a provider base
+  — re-scaled to 100 at each country's anchor year), or `"slope"` (only the trajectory
+  compares; the level gap is itself a finding). Analyzers read this to do the right
+  thing per indicator without re-deriving the economics.
 - **`sources/`**: one adapter per provider, each exposing
   `fetch(series) -> DataFrame[country, year, value]`. World Bank and IMF DataMapper are
   keyless. BIS uses the SDMX CSV API — its dimension keys in `sources/bis.py` are
@@ -65,8 +70,23 @@ Pipeline: `sources/*` fetch → `datastore` caches as parquet → `align` transf
   into the default `SERIES`.
 - **`datastore.py`**: canonical schema is `[country, year, value]` (annual). `read()`
   falls back to bundled `src/toy_money/seed/seed.csv` when a series is not cached.
-- **`align.py`**: the analytical core. Re-expresses each country on a "years since
-  anchor" axis (`t = year - anchor[country]`) so the curves overlay.
+- **`align.py`**: re-expresses each country on a "years since anchor" axis
+  (`t = year - anchor[country]`); `apply_comparison_basis` then applies `compare_as`.
+- **`analysis.py`**: turns aligned panels into stated conclusions. The **reference
+  point is China's latest observation** — every `Finding` answers "given where China is
+  now, what does the Japan precedent say?". An analyzer is any
+  `(panels, alignment) -> list[Finding]`; register it in `ANALYZERS`. `path_overlap` is
+  the first. `Finding` is the stable contract the report renders — add a second method
+  before generalising the interface, not before. **Deliberate non-features:** no
+  aggregate similarity score (different units / overlap lengths / one seed panel — an
+  average would look authoritative and mean nothing; the headline is a *count*), and no
+  probability (n=1 precedent — verdicts are categorical `tracks`/`diverges`/
+  `indeterminate`). A verdict needs `MIN_OVERLAP` comparable years or it is
+  `indeterminate`. The report recomputes every verdict under **all** anchor presets and
+  shows the matrix — a verdict that flips between presets is the finding.
+- **`report.py`**: `prepared_panels()` (from `analysis`) is the shared input for both
+  the figure and the analyzers. Chart follows the `dataviz` skill — shared x-axis
+  across the grid, CVD-validated palette, grey band marking t beyond China's data.
 
 ## Things that will bite you
 

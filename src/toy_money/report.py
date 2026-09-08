@@ -9,9 +9,9 @@ from pathlib import Path
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from . import datastore
-from .align import Alignment, align_series
-from .config import COUNTRIES, SERIES
+from .align import Alignment
+from .analysis import ANALYZERS, Finding, headline, prepared_panels
+from .config import ANCHOR_PRESETS, COUNTRIES
 
 # Categorical slots 1 & 2 from the data-viz reference palette (CVD-validated).
 _COLOR = {"CHN": "#2a78d6", "JPN": "#eb6834"}
@@ -22,19 +22,7 @@ _VIEW_T = (-25, 35)
 
 
 def _panels(alignment: Alignment):
-    panels = []
-    for s in SERIES:
-        if not s.in_report:
-            continue
-        try:
-            raw = datastore.read(s.key)
-        except FileNotFoundError:
-            continue
-        aligned = align_series(raw, alignment)
-        if aligned.empty:
-            continue
-        panels.append((s, aligned, datastore.provenance(s.key)))
-    return panels
+    return [(p.series, p.df, p.provenance) for p in prepared_panels(alignment)]
 
 
 def make_figure(alignment: Alignment):
@@ -166,7 +154,91 @@ def make_figure(alignment: Alignment):
     return fig, panels, seed_notes
 
 
-def build_report(alignment: Alignment, out_path: Path) -> Path:
+_VERDICT_STYLE = {
+    "tracks": "background:#e3f0e0;color:#2c6e2c",
+    "diverges": "background:#f6e0da;color:#a4432a",
+    "indeterminate": "background:#eee;color:#777",
+}
+
+
+def _finding_sentence(f: Finding, alignment: Alignment) -> str:
+    ref_year = alignment.anchors["CHN"] + f.reference_t
+    if f.chn_at_ref is None or f.jpn_at_ref is None:
+        gap = "no matched-t observation at the reference point"
+    else:
+        gap = (
+            f"China {f.chn_at_ref:.1f} vs. Japan {f.jpn_at_ref:.1f} at the same t "
+            f"(China is <b>{f.direction}</b>)"
+        )
+    fwd = ""
+    if f.jpn_forward:
+        lo, hi = min(f.jpn_forward), max(f.jpn_forward)
+        fwd = (
+            f" Japan over the next {hi - f.reference_t} years from here: "
+            f"{f.jpn_forward[lo]:.1f} → {f.jpn_forward[hi]:.1f} "
+            f"(precedent, not a forecast)."
+        )
+    return (
+        f"<b>{f.label}.</b> As of China's latest data (t={f.reference_t}, "
+        f"~{ref_year}): {gap}. Over {f.n_overlap} overlapping years the paths "
+        f"<b>{f.verdict}</b> — {f.rationale}.{fwd}"
+    )
+
+
+def _conclusions_html(alignment: Alignment, method: str) -> str:
+    analyzer = ANALYZERS[method]
+    findings = analyzer(prepared_panels(alignment), alignment)
+    if not findings:
+        return ""
+
+    # Anchor-sensitivity matrix: the verdict recomputed under every preset.
+    presets = list(ANCHOR_PRESETS)
+    matrix: dict[str, dict[str, str]] = {}
+    for name in presets:
+        from .align import resolve_alignment
+
+        al = resolve_alignment(name)
+        for f in analyzer(prepared_panels(al), al):
+            matrix.setdefault(f.key, {})[name] = f.verdict
+
+    rows = ""
+    for f in findings:
+        cells = "".join(
+            f"<td style='{_VERDICT_STYLE.get(matrix.get(f.key, {}).get(n, ''), '')};"
+            f"text-align:center;padding:3px 8px'>"
+            f"{matrix.get(f.key, {}).get(n, '–')}</td>"
+            for n in presets
+        )
+        rows += f"<tr><td style='padding:3px 8px'>{f.label}</td>{cells}</tr>"
+    head = "".join(f"<th style='padding:3px 8px'>{n}</th>" for n in presets)
+
+    sentences = "".join(
+        f"<li style='margin:6px 0'>{_finding_sentence(f, alignment)}</li>"
+        for f in findings
+    )
+
+    return (
+        "<div style='max-width:1100px;margin:16px auto 0;font:14px/1.55 system-ui;"
+        "color:#222'>"
+        f"<h2 style='margin:0 0 2px'>Conclusion — {headline(findings)}</h2>"
+        f"<p style='color:#666;margin:0 0 10px'>Method: <code>{method}</code>. "
+        "Reference point: China's latest observation. n=1 precedent — verdicts are "
+        "categorical (no probability, no aggregate score).</p>"
+        "<p style='margin:0 0 4px'><b>Verdict by indicator, under each anchor "
+        "preset</b> — a verdict that flips between presets is telling you the "
+        "similarity depends on how the timelines are aligned:</p>"
+        "<table style='border-collapse:collapse;font-size:13px;margin-bottom:14px'>"
+        f"<tr><th style='padding:3px 8px;text-align:left'>indicator</th>{head}</tr>"
+        f"{rows}</table>"
+        f"<ul style='margin:0;padding-left:18px'>{sentences}</ul>"
+        "</div><hr style='max-width:1100px;margin:18px auto;border:none;"
+        "border-top:1px solid #ddd'>"
+    )
+
+
+def build_report(
+    alignment: Alignment, out_path: Path, method: str = "path_overlap"
+) -> Path:
     fig, panels, seed_notes = make_figure(alignment)
     any_live = any(prov == "live" for _, _, prov in panels)
 
@@ -201,6 +273,7 @@ def build_report(alignment: Alignment, out_path: Path) -> Path:
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     html = fig.to_html(include_plotlyjs="inline", full_html=True)
+    html = html.replace("<body>", "<body>" + _conclusions_html(alignment, method), 1)
     html = html.replace("</body>", notes_html + "</body>")
     out_path.write_text(html, encoding="utf-8")
     return out_path

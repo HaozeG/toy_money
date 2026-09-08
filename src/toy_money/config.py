@@ -41,6 +41,13 @@ class Series:
     seed_note: str = ""  # extra caveat shown only when this series fell back to seed
     in_report: bool = True  # include this panel in the default comparison grid
     log_y: bool = False  # plot the panel on a log y-axis (level gaps spanning orders)
+    # What kind of cross-country comparison is meaningful for this indicator:
+    #   "level"              - ratios/rates, natively comparable (debt/GDP, %, ...)
+    #   "indexed_to_anchor"  - index numbers on a provider base; re-scale each
+    #                          country to 100 at its own anchor year before use
+    #   "slope"              - only the trajectory compares; the level gap is itself
+    #                          a finding (e.g. GDP per capita: "old before rich")
+    compare_as: str = "level"
 
 
 SERIES: list[Series] = [
@@ -65,6 +72,7 @@ SERIES: list[Series] = [
         source="worldbank",
         params={"indicator": "NY.GDP.PCAP.PP.KD"},
         log_y=True,
+        compare_as="slope",
     ),
     Series(
         key="cpi_inflation",
@@ -99,14 +107,16 @@ SERIES: list[Series] = [
     Series(
         key="real_property_prices",
         label="Real residential property prices",
-        unit="index",
+        unit="100 = anchor year",
         source="bis",
         # BIS WS_SPP selected residential property prices, real.
         params={"dataset": "WS_SPP", "unit_measure": "628"},
-        seed_note=(
-            "seed values are indexed to 100 at each country's bubble-peak year "
-            "(JPN 1990, CHN 2021), so a non-default --anchor misaligns the two "
-            "index bases. Live BIS data uses the provider's own base and avoids this."
+        compare_as="indexed_to_anchor",
+        note=(
+            "BIS publishes this on a common 2010=100 base, so raw levels are not "
+            "cross-country comparable. Re-indexed here to 100 at each country's own "
+            "anchor year — the curves show the path relative to each country's own "
+            "peak."
         ),
     ),
     Series(
