@@ -9,7 +9,7 @@ from pathlib import Path
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from .align import Alignment
+from .align import Alignment, resolve_alignment
 from .analysis import ANALYZERS, Finding, headline, prepared_panels
 from .config import ANCHOR_PRESETS, COUNTRIES
 
@@ -191,14 +191,18 @@ def _conclusions_html(alignment: Alignment, method: str) -> str:
     if not findings:
         return ""
 
-    # Anchor-sensitivity matrix: the verdict recomputed under every preset.
+    # Anchor-sensitivity matrix: the verdict recomputed under every preset. Reuse
+    # the findings already computed when a preset matches the active alignment.
     presets = list(ANCHOR_PRESETS)
     matrix: dict[str, dict[str, str]] = {}
     for name in presets:
-        from .align import resolve_alignment
-
         al = resolve_alignment(name)
-        for f in analyzer(prepared_panels(al), al):
+        fs = (
+            findings
+            if al.anchors == alignment.anchors
+            else analyzer(prepared_panels(al), al)
+        )
+        for f in fs:
             matrix.setdefault(f.key, {})[name] = f.verdict
 
     rows = ""

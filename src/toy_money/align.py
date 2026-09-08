@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 
 import pandas as pd
@@ -76,6 +77,12 @@ def apply_comparison_basis(df: pd.DataFrame, compare_as: str) -> pd.DataFrame:
     for country, g in df.groupby("country"):
         base_row = g.iloc[(g["t"].abs()).argmin()]
         base = base_row["value"]
+        if base_row["t"] != 0:
+            warnings.warn(
+                f"{country}: no observation at the anchor year; re-indexing "
+                f"'indexed_to_anchor' series to t={int(base_row['t'])} instead",
+                stacklevel=2,
+            )
         if base:
             out.loc[out["country"] == country, "value"] = (
                 out.loc[out["country"] == country, "value"] / base * 100.0
