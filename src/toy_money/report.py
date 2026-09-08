@@ -154,34 +154,39 @@ def make_figure(alignment: Alignment):
     return fig, panels, seed_notes
 
 
-_VERDICT_STYLE = {
-    "tracks": "background:#e3f0e0;color:#2c6e2c",
-    "diverges": "background:#f6e0da;color:#a4432a",
-    "indeterminate": "background:#eee;color:#777",
+_DIR_STYLE = {
+    "above": "background:#f6e0da;color:#a4432a",
+    "below": "background:#e3ecf6;color:#2a5a8c",
+    "crossing": "background:#eef0e6;color:#5a6a2c",
+    "n/a": "background:#eee;color:#999",
 }
 
 
 def _finding_sentence(f: Finding, alignment: Alignment) -> str:
     ref_year = alignment.anchors["CHN"] + f.reference_t
+    if f.verdict == "indeterminate":
+        return (
+            f"<b>{f.label}.</b> Indeterminate — {f.rationale}; not enough "
+            "comparable history to read a precedent."
+        )
     if f.chn_at_ref is None or f.jpn_at_ref is None:
-        gap = "no matched-t observation at the reference point"
+        gap = "no matched-t Japan observation at the reference point"
     else:
         gap = (
             f"China {f.chn_at_ref:.1f} vs. Japan {f.jpn_at_ref:.1f} at the same t "
-            f"(China is <b>{f.direction}</b>)"
+            f"— China is <b>{f.direction}</b>"
         )
     fwd = ""
     if f.jpn_forward:
         lo, hi = min(f.jpn_forward), max(f.jpn_forward)
         fwd = (
-            f" Japan over the next {hi - f.reference_t} years from here: "
+            f" Japan over its next {hi - f.reference_t} years from here: "
             f"{f.jpn_forward[lo]:.1f} → {f.jpn_forward[hi]:.1f} "
             f"(precedent, not a forecast)."
         )
     return (
-        f"<b>{f.label}.</b> As of China's latest data (t={f.reference_t}, "
-        f"~{ref_year}): {gap}. Over {f.n_overlap} overlapping years the paths "
-        f"<b>{f.verdict}</b> — {f.rationale}.{fwd}"
+        f"<b>{f.label}.</b> At China's latest data (t={f.reference_t}, ~{ref_year}), "
+        f"{f.n_overlap} overlapping years: {gap}.{fwd}"
     )
 
 
@@ -191,8 +196,10 @@ def _conclusions_html(alignment: Alignment, method: str) -> str:
     if not findings:
         return ""
 
-    # Anchor-sensitivity matrix: the verdict recomputed under every preset. Reuse
-    # the findings already computed when a preset matches the active alignment.
+    # Anchor-sensitivity matrix: China's direction vs. Japan at matched t,
+    # recomputed under every preset. A direction that flips between presets means
+    # the comparison depends on how the timelines are aligned. Reuse the active
+    # alignment's findings where a preset matches.
     presets = list(ANCHOR_PRESETS)
     matrix: dict[str, dict[str, str]] = {}
     for name in presets:
@@ -203,12 +210,12 @@ def _conclusions_html(alignment: Alignment, method: str) -> str:
             else analyzer(prepared_panels(al), al)
         )
         for f in fs:
-            matrix.setdefault(f.key, {})[name] = f.verdict
+            matrix.setdefault(f.key, {})[name] = f.direction
 
     rows = ""
     for f in findings:
         cells = "".join(
-            f"<td style='{_VERDICT_STYLE.get(matrix.get(f.key, {}).get(n, ''), '')};"
+            f"<td style='{_DIR_STYLE.get(matrix.get(f.key, {}).get(n, ''), '')};"
             f"text-align:center;padding:3px 8px'>"
             f"{matrix.get(f.key, {}).get(n, '–')}</td>"
             for n in presets
@@ -224,13 +231,15 @@ def _conclusions_html(alignment: Alignment, method: str) -> str:
     return (
         "<div style='max-width:1100px;margin:16px auto 0;font:14px/1.55 system-ui;"
         "color:#222'>"
-        f"<h2 style='margin:0 0 2px'>Conclusion — {headline(findings)}</h2>"
+        f"<h2 style='margin:0 0 2px'>Conclusion</h2>"
+        f"<p style='margin:0 0 4px'>{headline(findings)}.</p>"
         f"<p style='color:#666;margin:0 0 10px'>Method: <code>{method}</code>. "
-        "Reference point: China's latest observation. n=1 precedent — verdicts are "
-        "categorical (no probability, no aggregate score).</p>"
-        "<p style='margin:0 0 4px'><b>Verdict by indicator, under each anchor "
-        "preset</b> — a verdict that flips between presets is telling you the "
-        "similarity depends on how the timelines are aligned:</p>"
+        "Reference point: China's latest observation. One precedent (Japan) — the "
+        "report states where China sits relative to it and where Japan went next; "
+        "it does not score similarity or assign a probability.</p>"
+        "<p style='margin:0 0 4px'><b>China vs. Japan at matched t, by indicator "
+        "and anchor preset</b> — a direction that flips between presets depends on "
+        "how the timelines are aligned:</p>"
         "<table style='border-collapse:collapse;font-size:13px;margin-bottom:14px'>"
         f"<tr><th style='padding:3px 8px;text-align:left'>indicator</th>{head}</tr>"
         f"{rows}</table>"
@@ -241,7 +250,7 @@ def _conclusions_html(alignment: Alignment, method: str) -> str:
 
 
 def build_report(
-    alignment: Alignment, out_path: Path, method: str = "path_overlap"
+    alignment: Alignment, out_path: Path, method: str = "precedent"
 ) -> Path:
     fig, panels, seed_notes = make_figure(alignment)
     any_live = any(prov == "live" for _, _, prov in panels)

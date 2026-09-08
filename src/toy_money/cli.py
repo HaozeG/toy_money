@@ -144,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
     pb.add_argument("--out", help="output HTML path")
     pb.add_argument(
         "--method",
-        default="path_overlap",
+        default="precedent",
         choices=sorted(ANALYZERS),
         help="analysis method for the stated conclusion (default: %(default)s)",
     )

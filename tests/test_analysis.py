@@ -1,12 +1,7 @@
 import pandas as pd
 
 from toy_money.align import Alignment
-from toy_money.analysis import (
-    MIN_OVERLAP,
-    PreparedPanel,
-    headline,
-    path_overlap,
-)
+from toy_money.analysis import MIN_OVERLAP, PreparedPanel, headline, precedent
 from toy_money.config import Series
 
 _AL = Alignment(anchors={"JPN": 1990, "CHN": 2021}, label="test")
@@ -26,48 +21,40 @@ def _matched(cval, jval, n):
 
 
 def test_indeterminate_below_overlap_floor():
-    p = _panel("x", _matched(10, 10, MIN_OVERLAP - 1))
-    (f,) = path_overlap([p], _AL)
+    (f,) = precedent([_panel("x", _matched(10, 10, MIN_OVERLAP - 1))], _AL)
     assert f.verdict == "indeterminate"
+    assert f.direction == "n/a"
     assert f.n_overlap == MIN_OVERLAP - 1
 
 
-def test_tracks_when_paths_close():
-    p = _panel("x", _matched(100.0, 105.0, 12))  # 5% gap < 20% band
-    (f,) = path_overlap([p], _AL)
-    assert f.verdict == "tracks"
-
-
-def test_diverges_when_paths_far():
-    p = _panel("x", _matched(50.0, 100.0, 12))  # 50% gap
-    (f,) = path_overlap([p], _AL)
-    assert f.verdict == "diverges"
+def test_compared_reports_direction_not_similarity():
+    (f,) = precedent([_panel("x", _matched(50.0, 100.0, 12))], _AL)
+    assert f.verdict == "compared"  # never "tracks"/"diverges"
     assert f.direction == "below"  # China under Japan at the reference point
 
 
-def test_reference_point_is_china_latest():
+def test_direction_above_and_crossing():
+    (hi,) = precedent([_panel("x", _matched(120.0, 100.0, 12))], _AL)
+    assert hi.direction == "above"
+    (mid,) = precedent([_panel("x", _matched(100.5, 100.0, 12))], _AL)
+    assert mid.direction == "crossing"  # within 3%
+
+
+def test_reference_point_is_china_latest_and_forward_is_japan_only():
     rows = _matched(10, 10, 10)
     rows += [("JPN", 1991 + i, 10) for i in range(10)]  # Japan runs past China
-    p = _panel("x", rows)
-    (f,) = path_overlap([p], _AL)
-    assert f.reference_t == 0  # China's last year is 2021 -> t=0
-    assert set(f.jpn_forward) == {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+    (f,) = precedent([_panel("x", rows)], _AL)
+    assert f.reference_t == 0  # China's last year 2021 -> t=0
+    assert set(f.jpn_forward) == set(range(1, 11))
 
 
-def test_slope_series_compares_shape_not_level():
-    # China a tenth of Japan's level but identical growth -> should track.
-    rows = [("CHN", 2012 + i, 100 * 1.05**i) for i in range(10)]
-    rows += [("JPN", 1981 + i, 1000 * 1.05**i) for i in range(10)]
-    p = _panel("gdp", rows, compare_as="slope")
-    (f,) = path_overlap([p], _AL)
-    assert f.verdict == "tracks"
-    assert f.direction == "below"
-
-
-def test_headline_is_a_count_not_an_average():
-    p_track = _panel("a", _matched(100.0, 105.0, 12))
-    p_div = _panel("b", _matched(50.0, 100.0, 12))
-    p_indet = _panel("c", _matched(10, 10, 3))
-    assert headline(path_overlap([p_track, p_div, p_indet], _AL)) == (
-        "1 of 2 indicators track Japan's path (1 indeterminate)"
-    )
+def test_headline_counts_directions_only():
+    panels = [
+        _panel("a", _matched(120.0, 100.0, 12)),  # above
+        _panel("b", _matched(50.0, 100.0, 12)),  # below
+        _panel("c", _matched(10, 10, 3)),  # indeterminate
+    ]
+    h = headline(precedent(panels, _AL))
+    assert "1 and below on 1 of 2" in h
+    assert "1 indeterminate" in h
+    assert "track" not in h  # no similarity language
