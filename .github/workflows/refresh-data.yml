@@ -31,8 +31,9 @@ jobs:
         id: fetch
         run: |
           set +e
-          uv run toy-money fetch --force | tee fetch.log
-          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          set -o pipefail
+          uv run toy-money fetch --force 2>&1 | tee fetch.log
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
 
       - name: Summarise provenance
         if: always()

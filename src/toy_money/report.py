@@ -23,7 +23,10 @@ def _panels(alignment: Alignment):
             raw = datastore.read(s.key)
         except FileNotFoundError:
             continue
-        panels.append((s, align_series(raw, alignment), datastore.provenance(s.key)))
+        aligned = align_series(raw, alignment)
+        if aligned.empty:
+            continue
+        panels.append((s, aligned, datastore.provenance(s.key)))
     return panels
 
 

@@ -24,6 +24,9 @@ def fetch(series: Series) -> pd.DataFrame:
     rows = [
         {"country": iso, "year": year, "value": val}
         for iso, byyear in block.items()
+        if iso in COUNTRIES
         for year, val in byyear.items()
     ]
+    if not rows:
+        raise RuntimeError(f"IMF: no {ind} rows for {list(COUNTRIES)}")
     return pd.DataFrame(rows)

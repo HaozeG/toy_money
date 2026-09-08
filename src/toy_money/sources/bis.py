@@ -35,11 +35,22 @@ def _fetch_one(flow: str, key: str) -> pd.DataFrame:
     url = f"{BASE}/{flow}/{key}/all"
     text = get_text(url, params={"format": "csv"})
     raw = pd.read_csv(io.StringIO(text))
-    time_col = next(c for c in raw.columns if c.upper() in ("TIME_PERIOD", "TIME"))
-    val_col = next(c for c in raw.columns if c.upper() in ("OBS_VALUE", "VALUE"))
+    cols = {c.upper(): c for c in raw.columns}
+    time_col = cols.get("TIME_PERIOD") or cols.get("TIME")
+    val_col = cols.get("OBS_VALUE") or cols.get("VALUE")
+    if not time_col or not val_col:
+        raise RuntimeError(f"BIS {flow}: unexpected CSV columns {list(raw.columns)}")
     out = raw[[time_col, val_col]].rename(columns={time_col: "period", val_col: "value"})
-    out["year"] = out["period"].astype(str).str.slice(0, 4).astype(int)
+    out["year"] = out["period"].astype(str).str.slice(0, 4)
+    out["year"] = pd.to_numeric(out["year"], errors="coerce")
     out["value"] = pd.to_numeric(out["value"], errors="coerce")
+    out = out.dropna(subset=["year", "value"])
+    if out.empty:
+        raise RuntimeError(
+            f"BIS {flow} key='{key}': matched {len(raw)} rows but none parsed to "
+            f"(year, value). Columns: {list(raw.columns)}"
+        )
+    out["year"] = out["year"].astype(int)
     return out.groupby("year", as_index=False)["value"].mean()
 
 

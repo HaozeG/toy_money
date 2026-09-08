@@ -49,7 +49,7 @@ def resolve_alignment(
 def align_series(df: pd.DataFrame, alignment: Alignment) -> pd.DataFrame:
     """Add a `t` column = year - anchor[country]. Rows for unknown countries drop."""
     df = df[df["country"].isin(alignment.anchors)].copy()
-    df["t"] = df.apply(
-        lambda r: int(r["year"]) - alignment.anchors[r["country"]], axis=1
-    )
+    if df.empty:
+        return df.assign(t=pd.Series(dtype=int))
+    df["t"] = df["year"].astype(int) - df["country"].map(alignment.anchors).astype(int)
     return df.sort_values(["country", "t"]).reset_index(drop=True)
