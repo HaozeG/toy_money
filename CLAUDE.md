@@ -21,7 +21,7 @@ uv run toy-money pull-cache              # download cache from the refresh-data 
 uv run toy-money build                   # render artifacts/china_japan.html
 uv run toy-money build --anchor workingage_peak     # alternate alignment
 uv run toy-money build --anchor-jpn 1991 --anchor-chn 2021   # explicit anchors
-uv run toy-money build --method path_overlap        # pick the analysis method
+uv run toy-money build --method precedent           # pick the analysis method
 uv run pytest -q                         # all tests
 uv run pytest tests/test_align.py::test_align_shifts_to_years_since_anchor
 ```
@@ -75,15 +75,19 @@ Pipeline: `sources/*` fetch → `datastore` caches as parquet → `align` transf
 - **`analysis.py`**: turns aligned panels into stated conclusions. The **reference
   point is China's latest observation** — every `Finding` answers "given where China is
   now, what does the Japan precedent say?". An analyzer is any
-  `(panels, alignment) -> list[Finding]`; register it in `ANALYZERS`. `path_overlap` is
-  the first. `Finding` is the stable contract the report renders — add a second method
+  `(panels, alignment) -> list[Finding]`; register it in `ANALYZERS`. `precedent` is the
+  first. `Finding` is the stable contract the report renders — add a second method
   before generalising the interface, not before. **Deliberate non-features:** no
-  aggregate similarity score (different units / overlap lengths / one seed panel — an
-  average would look authoritative and mean nothing; the headline is a *count*), and no
-  probability (n=1 precedent — verdicts are categorical `tracks`/`diverges`/
-  `indeterminate`). A verdict needs `MIN_OVERLAP` comparable years or it is
-  `indeterminate`. The report recomputes every verdict under **all** anchor presets and
-  shows the matrix — a verdict that flips between presets is the finding.
+  aggregate similarity score; no probability (n=1 precedent); **no tracks/diverges
+  verdict** — that binary needs a similarity band, and every level-relative band is
+  scale-biased (a ~67-base indicator and a ~3-base one with the same shape agreement get
+  opposite verdicts). A `Finding` instead carries the numbers — `direction` (China vs
+  Japan at matched t), `n_overlap`, `jpn_forward` (Japan's next ≤10 years, *precedent
+  not forecast*) — and `verdict` is only `compared` or `indeterminate` (< `MIN_OVERLAP`
+  overlapping years). The headline counts *directions* (arithmetic). The report
+  recomputes `direction` under **all** anchor presets; a direction that flips is the
+  finding. **Soft spot:** the 3 BIS series use SDMX keys that were guessed and returned
+  plausible-looking data but are unverified against stats.bis.org.
 - **`report.py`**: `prepared_panels()` (from `analysis`) is the shared input for both
   the figure and the analyzers. Chart follows the `dataviz` skill — shared x-axis
   across the grid, CVD-validated palette, grey band marking t beyond China's data.
