@@ -37,7 +37,8 @@ class Series:
     unit: str
     source: str  # worldbank | imf | bis | fred | seed
     params: dict = field(default_factory=dict)
-    note: str = ""  # data-reliability caveat shown in the report
+    note: str = ""  # caveat shown in the report whatever the data source
+    seed_note: str = ""  # extra caveat shown only when this series fell back to seed
 
 
 SERIES: list[Series] = [
@@ -99,11 +100,10 @@ SERIES: list[Series] = [
         source="bis",
         # BIS WS_SPP selected residential property prices, real.
         params={"dataset": "WS_SPP", "unit_measure": "628"},
-        note=(
-            "Seed values are indexed to 100 at each country's bubble-peak year "
-            "(JPN 1990, CHN 2021); under a different --anchor the two index bases "
-            "no longer coincide at t=0. A live BIS fetch returns the provider's "
-            "own index base and avoids this."
+        seed_note=(
+            "seed values are indexed to 100 at each country's bubble-peak year "
+            "(JPN 1990, CHN 2021), so a non-default --anchor misaligns the two "
+            "index bases. Live BIS data uses the provider's own base and avoids this."
         ),
     ),
     Series(

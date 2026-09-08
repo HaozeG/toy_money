@@ -79,9 +79,10 @@ def build_report(alignment: Alignment, out_path: Path) -> Path:
         if s.note:
             seed_notes.append(f"<b>{s.label}:</b> {s.note}")
         if prov == "seed":
+            extra = f" {s.seed_note}" if s.seed_note else ""
             seed_notes.append(
                 f"<b>{s.label}:</b> hand-seeded approximate data — "
-                f"live fetch unavailable, not from the official provider."
+                f"live fetch unavailable, not from the official provider.{extra}"
             )
 
     fig.update_xaxes(title_text="years since anchor", row=nrows, col=1)
