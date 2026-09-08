@@ -8,8 +8,13 @@ retracing Japan's path, so the choice must stay explicit and swappable.
 
 from __future__ import annotations
 
+import datetime as _dt
 from dataclasses import dataclass, field
 from pathlib import Path
+
+# Observations after this year are treated as projections and dropped at build
+# time (IMF WEO, some BIS series publish forward estimates).
+MAX_YEAR = _dt.date.today().year
 
 # --- paths -------------------------------------------------------------------
 

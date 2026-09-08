@@ -25,6 +25,18 @@ def test_unknown_preset_raises():
         resolve_alignment("nope")
 
 
+def test_align_drops_projection_years():
+    df = pd.DataFrame(
+        {
+            "country": ["JPN", "JPN", "CHN", "CHN"],
+            "year": [1990, 2031, 2021, 2031],
+            "value": [1.0, 2.0, 3.0, 4.0],
+        }
+    )
+    out = align_series(df, resolve_alignment("bubble_peak"), max_year=2026)
+    assert set(out["year"]) == {1990, 2021}
+
+
 def test_align_shifts_to_years_since_anchor():
     df = pd.DataFrame(
         {

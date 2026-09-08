@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from .config import ANCHOR_PRESETS, COUNTRIES
+from .config import ANCHOR_PRESETS, COUNTRIES, MAX_YEAR
 
 
 @dataclass(frozen=True)
@@ -46,9 +46,16 @@ def resolve_alignment(
     return Alignment(anchors=anchors, label=label)
 
 
-def align_series(df: pd.DataFrame, alignment: Alignment) -> pd.DataFrame:
-    """Add a `t` column = year - anchor[country]. Rows for unknown countries drop."""
-    df = df[df["country"].isin(alignment.anchors)].copy()
+def align_series(
+    df: pd.DataFrame, alignment: Alignment, max_year: int = MAX_YEAR
+) -> pd.DataFrame:
+    """Add a `t` column = year - anchor[country]. Rows for unknown countries drop.
+
+    Observations after `max_year` are dropped so IMF/BIS forward projections
+    (e.g. WEO runs to +5y) don't get plotted as if they were realised data —
+    the tool is about testing against *past* data.
+    """
+    df = df[df["country"].isin(alignment.anchors) & (df["year"] <= max_year)].copy()
     if df.empty:
         return df.assign(t=pd.Series(dtype=int))
     df["t"] = df["year"].astype(int) - df["country"].map(alignment.anchors).astype(int)

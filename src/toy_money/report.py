@@ -121,7 +121,8 @@ def build_report(alignment: Alignment, out_path: Path) -> Path:
         "<div style='max-width:1100px;margin:20px auto;font:13px/1.5 system-ui;"
         "color:#444;border-top:1px solid #ddd;padding-top:12px'>"
         + (f"<b>Data caveats</b><ul>{items}</ul>" if seed_notes else "")
-        + f"<p style='color:#888'>Generated {_dt.date.today().isoformat()} by toy-money. "
+        + f"<p style='color:#888'>Generated {_dt.date.today().isoformat()} by toy-money; "
+        + "observations after the current year (IMF/BIS forward projections) are excluded. "
         + source_line
         + "</p></div>"
     )
