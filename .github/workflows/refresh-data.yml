@@ -1,0 +1,65 @@
+name: refresh-data
+
+# Fetches macro series from the official providers on GitHub's runners, which are
+# not behind the network policy that blocks api.worldbank.org / www.imf.org /
+# stats.bis.org from the dev machine. Publishes the parquet cache as a workflow
+# artifact; pull it locally with `uv run toy-money pull-cache`.
+#
+# This run's log is also the first real integration test of sources/*.py — those
+# adapters were written against documented API shapes and have never seen a live
+# response. Expect BIS to need key fixes (see sources/bis.py).
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Monthly — the series are annual/quarterly, nothing changes faster.
+    - cron: "17 6 1 * *"
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Sync deps
+        run: uv sync --extra dev
+
+      - name: Fetch (non-fatal; we publish whatever came back)
+        id: fetch
+        run: |
+          set +e
+          uv run toy-money fetch --force | tee fetch.log
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Summarise provenance
+        if: always()
+        run: |
+          {
+            echo '## Data refresh result'
+            echo
+            echo "fetch exit code: \`${{ steps.fetch.outputs.exit_code }}\` (non-zero = at least one source degraded to seed)"
+            echo
+            echo '```'
+            cat fetch.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload cache
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: data-cache
+          path: |
+            data/*.parquet
+            data/*.meta.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Fail the run if any source degraded
+        if: steps.fetch.outputs.exit_code != '0'
+        run: |
+          echo "::warning::At least one source fell back to seed data — cache published, but incomplete. Check the job summary."
+          exit 1
