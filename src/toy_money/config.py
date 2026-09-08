@@ -39,6 +39,8 @@ class Series:
     params: dict = field(default_factory=dict)
     note: str = ""  # caveat shown in the report whatever the data source
     seed_note: str = ""  # extra caveat shown only when this series fell back to seed
+    in_report: bool = True  # include this panel in the default comparison grid
+    log_y: bool = False  # plot the panel on a log y-axis (level gaps spanning orders)
 
 
 SERIES: list[Series] = [
@@ -58,10 +60,11 @@ SERIES: list[Series] = [
     ),
     Series(
         key="gdp_pc_ppp",
-        label="GDP per capita, PPP (constant 2021 $)",
-        unit="constant intl. $",
+        label="GDP per capita, PPP",
+        unit="constant intl. dollars, log scale",
         source="worldbank",
         params={"indicator": "NY.GDP.PCAP.PP.KD"},
+        log_y=True,
     ),
     Series(
         key="cpi_inflation",
@@ -125,6 +128,10 @@ SERIES: list[Series] = [
         unit="see tooltip",
         source="seed",
         params={"file": "grad_labor.csv"},
+        # Excluded from the default grid: Japan 求人倍率 and China's CIER index are
+        # different constructions, so overlaying them on one axis would assert a
+        # like-for-like comparison that does not hold. Kept for ad-hoc use.
+        in_report=False,
         note=(
             "Japan = effective jobs-to-applicants ratio (求人倍率, MHLW); "
             "China = CIER labour-market tightness index (Zhaopin/Renmin Univ.). "
