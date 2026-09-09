@@ -5,8 +5,9 @@ answers "given where China is now, what does the Japan precedent say?"
 
 Design for reuse: an analyzer is any callable
 `(panels, alignment) -> list[Finding]`. `precedent` is the first concrete one.
-A second method (DTW, regime classifier, an LLM judge, ...) returns the same
-`Finding` shape with its own `method` string, and the report renders it unchanged.
+A second method (a Δ-from-anchor comparison against many episodes, a regime
+classifier, ...) returns the same `Finding` shape with its own `method` string,
+and the report renders it unchanged.
 
 Deliberate non-features:
 - No aggregate similarity score. Indicators have different units, different
@@ -16,13 +17,16 @@ Deliberate non-features:
 - **No automatic "tracks vs. diverges" verdict.** That binary needs a defensible
   similarity band, and any level-relative band is scale-biased: an indicator on a
   ~67 base (working-age %) and one on a ~3 base (GDP growth %) with the *same*
-  shape agreement get opposite verdicts purely from the denominator. Two attempts
-  at a scale-free normalisation both failed on flat-Japan windows. So a finding
+  shape agreement get opposite verdicts purely from the denominator. So a finding
   carries the numbers — where China sits relative to Japan at matched t, and
-  Japan's subsequent path — and the reader judges similarity. The headline counts
-  *directions*, which is arithmetic.
+  Japan's subsequent path — and the reader judges similarity.
+- **No scoreboard in the headline.** Counting above/below directions is
+  arithmetic, but a reader takes a tally as a verdict. The headline names what was
+  compared and leaves the per-indicator directions to the table below it.
 - Overlap is counted only inside `ANALYSIS_WINDOW`, so the comparison does not
-  silently span China's pre-reform years and Japan's 1960s.
+  silently span China's pre-reform years and Japan's 1960s. The hypothesis is
+  about the *post-anchor* path, so the verdict gate is on post-anchor overlap
+  (`n_post`), not the total.
 """
 
 from __future__ import annotations
@@ -35,15 +39,20 @@ from .align import Alignment, align_series, apply_comparison_basis
 from .config import ANALYSIS_WINDOW, SERIES, Series
 from . import datastore
 
-# Below this many overlapping-t years there is not enough comparable history to
-# say anything — the finding is `indeterminate`.
-MIN_OVERLAP = 8
+# Post-anchor overlapping years required before a direction is stated. The
+# hypothesis is a claim about the post-anchor trajectory, so pre-anchor history
+# does not count toward this gate.
+#
+# PLACEHOLDER: 3 is a floor for "can say anything at all". Phase B1 fixes the
+# comparison window per sub-hypothesis and this should follow from that.
+MIN_POST = 3
 
 
 @dataclass(frozen=True)
 class PreparedPanel:
     series: Series
     df: pd.DataFrame  # columns: country, year, value, t  (comparison basis applied)
+    raw_df: pd.DataFrame  # same, aligned but PRE comparison-basis (native units)
     provenance: str
 
 
@@ -52,13 +61,19 @@ class Finding:
     key: str
     label: str
     method: str
+    compare_as: str  # level | indexed_to_anchor | slope  (how chn/jpn values read)
     verdict: str  # compared | indeterminate
     direction: str  # above | below | crossing | n/a  (China vs Japan at matched t)
-    n_overlap: int
+    n_overlap: int  # n_pre + n_post, kept for compatibility
+    n_pre: int  # overlapping t in window with t < 0
+    n_post: int  # overlapping t in window with t >= 0
     reference_t: int  # China's latest t
     chn_at_ref: float | None
     jpn_at_ref: float | None  # Japan at the same t (the precedent value)
     jpn_forward: dict = field(default_factory=dict)  # {t: value} past reference_t
+    # (chn, jpn) raw values at the anchor, native units — set for compare_as="slope"
+    # where the level gap is a finding in its own right; None otherwise.
+    level_gap_at_anchor: tuple[float, float] | None = None
     provenance: str = "live"
     rationale: str = ""
 
@@ -75,10 +90,11 @@ def prepared_panels(
             raw = datastore.read(s.key)
         except FileNotFoundError:
             continue
-        df = apply_comparison_basis(align_series(raw, alignment), s.compare_as)
+        aligned = align_series(raw, alignment)
+        df = apply_comparison_basis(aligned, s.compare_as)
         if df.empty:
             continue
-        out.append(PreparedPanel(s, df, datastore.provenance(s.key)))
+        out.append(PreparedPanel(s, df, aligned, datastore.provenance(s.key)))
     return out
 
 
@@ -94,23 +110,42 @@ def _overlap_t(chn: pd.Series, jpn: pd.Series) -> pd.Index:
     return common[(common >= lo) & (common <= hi)]
 
 
-def _direction(chn_ref: float | None, jpn_ref: float | None) -> str:
-    """Where China sits relative to Japan at the reference point."""
+def _direction(
+    chn_ref: float | None, jpn_ref: float | None, band: float | None
+) -> str:
+    """Where China sits relative to Japan at the reference point.
+
+    `band` is an absolute half-width in the indicator's natural unit; inside it
+    the two are "crossing". `band is None` => only above/below.
+    """
     if chn_ref is None or jpn_ref is None:
         return "n/a"
-    if abs(chn_ref - jpn_ref) / max(abs(jpn_ref), 1e-9) <= 0.03:
+    if band is not None and abs(chn_ref - jpn_ref) <= band:
         return "crossing"
     return "above" if chn_ref > jpn_ref else "below"
+
+
+def _level_gap_at_anchor(
+    raw_df: pd.DataFrame,
+) -> tuple[float, float] | None:
+    """(China, Japan) raw values at (or nearest) t=0, in native units."""
+    out = {}
+    for c in ("CHN", "JPN"):
+        g = raw_df[raw_df["country"] == c]
+        if g.empty:
+            return None
+        out[c] = float(g.iloc[g["t"].abs().argmin()]["value"])
+    return (out["CHN"], out["JPN"])
 
 
 def precedent(panels: list[PreparedPanel], alignment: Alignment) -> list[Finding]:
     """For each indicator, read off the Japan precedent from China's current
     position: where China sits vs. Japan at the same t, and where Japan went next.
 
-    Overlap is counted only inside `ANALYSIS_WINDOW`, so the count reflects the
-    shared, economically comparable part of the two timelines rather than the
-    whole intersection. No similarity verdict — see the module docstring.
-    `verdict` is only `indeterminate` or `compared`.
+    Overlap is counted only inside `ANALYSIS_WINDOW` and split into pre/post
+    anchor. The verdict gate is on post-anchor overlap (`n_post >= MIN_POST`),
+    since the hypothesis is about the post-anchor path. No similarity verdict —
+    see the module docstring. `verdict` is only `indeterminate` or `compared`.
     """
     findings: list[Finding] = []
     for p in panels:
@@ -119,49 +154,58 @@ def precedent(panels: list[PreparedPanel], alignment: Alignment) -> list[Finding
         if chn.empty or jpn.empty:
             continue
         ref_t = int(chn.index.max())
-        n = len(_overlap_t(chn, jpn))
+        overlap = _overlap_t(chn, jpn)
+        n_pre = int((overlap < 0).sum())
+        n_post = int((overlap >= 0).sum())
         chn_ref = float(chn.loc[ref_t]) if ref_t in chn.index else None
         jpn_ref = float(jpn.loc[ref_t]) if ref_t in jpn.index else None
         jpn_forward = {
-            int(t): round(float(jpn.loc[t]), 2)
+            int(t): round(float(jpn.loc[t]), 4)
             for t in jpn.index
             if ref_t < t <= ref_t + 10
         }
-        if n < MIN_OVERLAP:
-            verdict = "indeterminate"
-            direction = "n/a"
+        level_gap = (
+            _level_gap_at_anchor(p.raw_df)
+            if p.series.compare_as == "slope"
+            else None
+        )
+
+        if n_post < MIN_POST:
+            verdict, direction = "indeterminate", "n/a"
             rationale = (
-                f"only {n} overlapping years in t={ANALYSIS_WINDOW[0]}.."
-                f"{ANALYSIS_WINDOW[1]} (need {MIN_OVERLAP})"
+                f"only {n_post} post-anchor overlapping year(s) "
+                f"(need {MIN_POST}); {n_pre} pre-anchor"
             )
         elif jpn_ref is None:
-            # There is enough overlap, but Japan has no observation at the
-            # exact reference t, so no matched-t direction can be stated.
-            verdict = "indeterminate"
-            direction = "n/a"
+            verdict, direction = "indeterminate", "n/a"
             rationale = (
-                f"{n} overlapping years, but no Japan observation at China's "
-                f"reference t={ref_t}"
+                f"{n_post} post-anchor overlapping years, but no Japan "
+                f"observation at China's reference t={ref_t}"
             )
         else:
             verdict = "compared"
-            direction = _direction(chn_ref, jpn_ref)
+            direction = _direction(chn_ref, jpn_ref, p.series.band)
             rationale = (
-                f"{n} overlapping years in t={ANALYSIS_WINDOW[0]}.."
-                f"{ANALYSIS_WINDOW[1]}"
+                f"{n_pre} pre-anchor, {n_post} post-anchor overlapping years "
+                f"in t={ANALYSIS_WINDOW[0]}..{ANALYSIS_WINDOW[1]}"
             )
+
         findings.append(
             Finding(
                 key=p.series.key,
                 label=p.series.label,
                 method="precedent",
+                compare_as=p.series.compare_as,
                 verdict=verdict,
                 direction=direction,
-                n_overlap=n,
+                n_overlap=n_pre + n_post,
+                n_pre=n_pre,
+                n_post=n_post,
                 reference_t=ref_t,
                 chn_at_ref=chn_ref,
                 jpn_at_ref=jpn_ref,
                 jpn_forward=jpn_forward,
+                level_gap_at_anchor=level_gap,
                 provenance=p.provenance,
                 rationale=rationale,
             )
@@ -173,20 +217,20 @@ ANALYZERS = {"precedent": precedent}
 
 
 def headline(findings: list[Finding]) -> str:
-    """Descriptive counts only — directions are arithmetic; similarity is not."""
-    compared = [f for f in findings if f.verdict == "compared"]
-    indet = len(findings) - len(compared)
-    above = sum(f.direction == "above" for f in compared)
-    below = sum(f.direction == "below" for f in compared)
-    crossing = sum(f.direction == "crossing" for f in compared)
+    """Names the scope of the comparison. No direction tally — a reader takes a
+    count as a verdict, and the per-indicator table already carries the directions.
+    """
+    n = len(findings)
+    compared = sum(f.verdict == "compared" for f in findings)
+    indet = n - compared
     if indet:
-        lead = (
-            f"{len(findings)} indicators: {len(compared)} comparable, "
-            f"{indet} indeterminate"
+        scope = (
+            f"{n} indicators, {compared} with a stated China-vs-Japan position "
+            f"at China's reference point, {indet} indeterminate"
         )
     else:
-        lead = f"{len(findings)} indicators compared"
+        scope = f"{n} indicators, all with a stated China-vs-Japan position at China's reference point"
     return (
-        f"{lead}; at matched t China is above Japan on {above}, below on {below}, "
-        f"and crossing on {crossing} of {len(compared)}"
+        f"{scope}. Per-indicator direction and Japan's forward path below; the "
+        f"anchor matrix shows how positions shift by alignment"
     )

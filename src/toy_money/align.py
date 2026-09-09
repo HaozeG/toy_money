@@ -7,6 +7,7 @@ from __future__ import annotations
 import warnings
 from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
 
 from .config import ANCHOR_PRESETS, COUNTRIES, MAX_YEAR
@@ -64,28 +65,41 @@ def align_series(
     return df.sort_values(["country", "t"]).reset_index(drop=True)
 
 
+def _anchor_base(g: pd.DataFrame, compare_as: str) -> float:
+    """The value to normalise a country's series against: its observation at t=0,
+    or the nearest available t (with a warning)."""
+    base_row = g.iloc[(g["t"].abs()).argmin()]
+    if base_row["t"] != 0:
+        warnings.warn(
+            f"{g['country'].iloc[0]}: no observation at the anchor year; "
+            f"'{compare_as}' series based on t={int(base_row['t'])} instead",
+            stacklevel=3,
+        )
+    return float(base_row["value"])
+
+
 def apply_comparison_basis(df: pd.DataFrame, compare_as: str) -> pd.DataFrame:
     """Put an aligned frame onto the basis on which cross-country comparison is
     meaningful for its indicator (see `Series.compare_as`).
 
-    - "level" / "slope": returned unchanged (slope handling is the caller's job).
-    - "indexed_to_anchor": rescale each country so its value at t=0 — or the
-      observation nearest t=0 — is 100, cancelling any provider index base.
+    - "level": returned unchanged.
+    - "indexed_to_anchor": rescale each country so its value at t=0 (or the
+      nearest t) is 100, cancelling any provider index base.
+    - "slope": replace value with log(value / value_at_anchor) per country, so the
+      series starts at 0 at t=0 and reads as cumulative log-change from the anchor.
+      Only the trajectory then compares; the level gap at the anchor is recorded
+      separately by the analyzer.
     """
-    if compare_as != "indexed_to_anchor" or df.empty:
+    if compare_as not in ("indexed_to_anchor", "slope") or df.empty:
         return df
     out = df.copy()
     for country, g in df.groupby("country"):
-        base_row = g.iloc[(g["t"].abs()).argmin()]
-        base = base_row["value"]
-        if base_row["t"] != 0:
-            warnings.warn(
-                f"{country}: no observation at the anchor year; re-indexing "
-                f"'indexed_to_anchor' series to t={int(base_row['t'])} instead",
-                stacklevel=2,
-            )
-        if base:
-            out.loc[out["country"] == country, "value"] = (
-                out.loc[out["country"] == country, "value"] / base * 100.0
-            )
+        base = _anchor_base(g, compare_as)
+        mask = out["country"] == country
+        if compare_as == "indexed_to_anchor":
+            if base:
+                out.loc[mask, "value"] = out.loc[mask, "value"] / base * 100.0
+        else:  # slope
+            if base > 0:
+                out.loc[mask, "value"] = np.log(out.loc[mask, "value"] / base)
     return out

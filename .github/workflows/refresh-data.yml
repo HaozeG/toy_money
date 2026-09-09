@@ -5,9 +5,11 @@ name: refresh-data
 # stats.bis.org from the dev machine. Publishes the parquet cache as a workflow
 # artifact; pull it locally with `uv run toy-money pull-cache`.
 #
-# This run's log is the live integration test for sources/*.py. A branch run
-# fetched all provider-backed series and exercised BIS dimension validation
-# against the live SDMX CSV; adding a new BIS flow still needs a human check.
+# This run is the live integration test for sources/*.py: it fetches every
+# provider-backed series, exercises BIS dimension validation against the live
+# SDMX CSV, and then runs tests/test_live_vs_seed.py to catch a key that parsed
+# but selected the wrong series. Adding a new BIS flow still needs a human check
+# (`toy-money verify`).
 
 on:
   workflow_dispatch:
@@ -35,6 +37,14 @@ jobs:
           uv run toy-money fetch --force 2>&1 | tee fetch.log
           echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
 
+      - name: Live vs seed (wrong-key signal, not a network signal)
+        id: livecheck
+        if: always()
+        run: |
+          set +e
+          uv run pytest tests/test_live_vs_seed.py -q 2>&1 | tee livecheck.log
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
       - name: Summarise provenance
         if: always()
         run: |
@@ -42,9 +52,12 @@ jobs:
             echo '## Data refresh result'
             echo
             echo "fetch exit code: \`${{ steps.fetch.outputs.exit_code }}\` (non-zero = at least one source degraded to seed)"
+            echo "live-vs-seed exit code: \`${{ steps.livecheck.outputs.exit_code }}\` (non-zero = a live series disagrees with the hand-checked seed — likely wrong BIS key)"
             echo
             echo '```'
             cat fetch.log
+            echo
+            cat livecheck.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -63,4 +76,10 @@ jobs:
         if: steps.fetch.outputs.exit_code != '0'
         run: |
           echo "::warning::At least one source fell back to seed data — cache published, but incomplete. Check the job summary."
+          exit 1
+
+      - name: Fail the run if live disagrees with seed
+        if: steps.livecheck.outputs.exit_code != '0'
+        run: |
+          echo "::warning::A live series disagrees with the hand-checked seed — a BIS key may have selected the wrong series. Check the job summary."
           exit 1

@@ -47,7 +47,6 @@ class Series:
     note: str = ""  # caveat shown in the report whatever the data source
     seed_note: str = ""  # extra caveat shown only when this series fell back to seed
     in_report: bool = True  # include this panel in the default comparison grid
-    log_y: bool = False  # plot the panel on a log y-axis (level gaps spanning orders)
     # What kind of cross-country comparison is meaningful for this indicator:
     #   "level"              - ratios/rates, natively comparable (debt/GDP, %, ...)
     #   "indexed_to_anchor"  - index numbers on a provider base; re-scale each
@@ -55,6 +54,14 @@ class Series:
     #   "slope"              - only the trajectory compares; the level gap is itself
     #                          a finding (e.g. GDP per capita: "old before rich")
     compare_as: str = "level"
+    # Half-width, in the indicator's natural unit (after `compare_as`), within
+    # which China and Japan count as "crossing" rather than "above"/"below" at a
+    # matched t. `None` => report only above/below (sign of the raw difference).
+    # A "crossing" call should mean "within revision noise of equal".
+    band: float | None = None
+    # Rendered with the panel and in the caveats list whatever the data source;
+    # for comparisons that are not definition-comparable across episodes.
+    definition_note: str = ""
 
 
 SERIES: list[Series] = [
@@ -64,6 +71,7 @@ SERIES: list[Series] = [
         unit="% per year",
         source="worldbank",
         params={"indicator": "NY.GDP.MKTP.KD.ZG"},
+        band=0.5,
     ),
     Series(
         key="workingage_share",
@@ -71,15 +79,16 @@ SERIES: list[Series] = [
         unit="% of total",
         source="worldbank",
         params={"indicator": "SP.POP.1564.TO.ZS"},
+        band=0.3,
     ),
     Series(
         key="gdp_pc_ppp",
         label="GDP per capita, PPP",
-        unit="constant intl. dollars, log scale",
+        unit="cumulative log-change from anchor",
         source="worldbank",
         params={"indicator": "NY.GDP.PCAP.PP.KD"},
-        log_y=True,
         compare_as="slope",
+        band=None,  # a log-change has no natural absolute "crossing" width
     ),
     Series(
         key="cpi_inflation",
@@ -87,6 +96,7 @@ SERIES: list[Series] = [
         unit="% per year",
         source="worldbank",
         params={"indicator": "FP.CPI.TOTL.ZG"},
+        band=0.5,
     ),
     Series(
         key="gov_debt_gdp",
@@ -95,6 +105,13 @@ SERIES: list[Series] = [
         source="imf",
         # IMF DataMapper indicator; keyless JSON API.
         params={"indicator": "GGXWDG_NGDP"},
+        band=3.0,
+        definition_note=(
+            "IMF WEO GGXWDG_NGDP is general-government gross debt on a narrow "
+            "definition. Japan 1990 and China now are not definition-comparable — "
+            "China's figure excludes large LGFV and other off-balance-sheet "
+            "local-government liabilities."
+        ),
     ),
     Series(
         key="credit_hh_gdp",
@@ -103,6 +120,7 @@ SERIES: list[Series] = [
         source="bis",
         # BIS WS_TC (credit to non-financial sector). Borrower sector H = households.
         params={"borrowers": "H"},
+        band=2.0,
     ),
     Series(
         key="credit_nfc_gdp",
@@ -110,6 +128,7 @@ SERIES: list[Series] = [
         unit="% of GDP",
         source="bis",
         params={"borrowers": "N"},
+        band=3.0,
     ),
     Series(
         key="real_property_prices",
@@ -119,6 +138,7 @@ SERIES: list[Series] = [
         # BIS WS_SPP selected residential property prices, real.
         params={"dataset": "WS_SPP", "unit_measure": "628"},
         compare_as="indexed_to_anchor",
+        band=3.0,  # index points on the re-based 100 = anchor scale
         note=(
             "BIS publishes this on a common 2010=100 base, so raw levels are not "
             "cross-country comparable. Re-indexed here to 100 at each country's own "
@@ -132,6 +152,7 @@ SERIES: list[Series] = [
         unit="%",
         source="worldbank",
         params={"indicator": "SL.UEM.1524.ZS"},
+        band=1.0,
         note=(
             "China's official 16–24 urban jobless rate had a methodology break: "
             "NBS suspended it in mid-2023 and resumed in 2024 excluding students. "

@@ -72,6 +72,24 @@ def _validate_dimensions(flow: str, raw: pd.DataFrame, expected: dict[str, str])
         )
 
 
+def _key_for(dataset: str, iso3: str, borrowers: str) -> str:
+    cty = _ISO2[iso3]
+    if dataset == "WS_SPP":
+        return _SPP_KEY.format(cty=cty)
+    return _TC_KEY.format(cty=cty, borrowers=borrowers)
+
+
+def request_urls(series: Series) -> list[tuple[str, str]]:
+    """(country, full CSV request URL) for each country — for `toy-money verify`."""
+    dataset = series.params.get("dataset", "WS_TC")
+    borrowers = series.params.get("borrowers", "P")
+    urls = []
+    for iso3 in COUNTRIES:
+        key = _key_for(dataset, iso3, borrowers)
+        urls.append((iso3, f"{BASE}/{dataset}/{key}/all?format=csv"))
+    return urls
+
+
 def _fetch_one(flow: str, key: str, expected: dict[str, str]) -> pd.DataFrame:
     url = f"{BASE}/{flow}/{key}/all"
     text = get_text(url, params={"format": "csv"})
@@ -98,14 +116,12 @@ def _fetch_one(flow: str, key: str, expected: dict[str, str]) -> pd.DataFrame:
 
 def fetch(series: Series) -> pd.DataFrame:
     dataset = series.params.get("dataset", "WS_TC")
+    borrowers = series.params.get("borrowers", "P")
     frames = []
     for iso3 in COUNTRIES:
         cty = _ISO2[iso3]
-        if dataset == "WS_SPP":
-            key = _SPP_KEY.format(cty=cty)
-        else:
-            key = _TC_KEY.format(cty=cty, borrowers=series.params.get("borrowers", "P"))
-        expected = _expected_dimensions(dataset, cty, series.params.get("borrowers", "P"))
+        key = _key_for(dataset, iso3, borrowers)
+        expected = _expected_dimensions(dataset, cty, borrowers)
         df = _fetch_one(dataset, key, expected)
         df["country"] = iso3
         frames.append(df[["country", "year", "value"]])

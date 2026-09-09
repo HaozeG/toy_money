@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import datetime as _dt
+import hashlib
+import json
 import math
+from dataclasses import asdict
 from pathlib import Path
 
 import plotly.graph_objects as go
@@ -11,7 +14,8 @@ from plotly.subplots import make_subplots
 
 from .align import Alignment, resolve_alignment
 from .analysis import ANALYZERS, Finding, headline, prepared_panels
-from .config import ANCHOR_PRESETS, ANALYSIS_WINDOW, COUNTRIES, MAX_YEAR
+from .config import ANCHOR_PRESETS, ANALYSIS_WINDOW, COUNTRIES, MAX_YEAR, SERIES
+from . import datastore
 
 # Categorical slots 1 & 2 from the data-viz reference palette (CVD-validated).
 _COLOR = {"CHN": "#2a78d6", "JPN": "#eb6834"}
@@ -93,14 +97,6 @@ def make_figure(alignment: Alignment):
                 col=col,
             )
 
-        if s.log_y:
-            fig.update_yaxes(
-                type="log",
-                tickvals=[2500, 5000, 10000, 20000, 40000],
-                ticktext=["2.5k", "5k", "10k", "20k", "40k"],
-                row=row,
-                col=col,
-            )
         fig.add_vline(
             x=0, line_width=1, line_dash="dot", line_color="#888", row=row, col=col
         )
@@ -117,6 +113,10 @@ def make_figure(alignment: Alignment):
 
         if s.note:
             seed_notes.append(f"<b>{s.label}:</b> {s.note}")
+        if s.definition_note:
+            seed_notes.append(
+                f"<b>{s.label} (definition):</b> {s.definition_note}"
+            )
         if prov == "seed":
             extra = f" {s.seed_note}" if s.seed_note else ""
             seed_notes.append(
@@ -170,30 +170,43 @@ def _finding_sentence(f: Finding, alignment: Alignment) -> str:
             f"<b>{f.label}.</b> Indeterminate — {f.rationale}. "
             "No direction is stated."
         )
+
+    lead = ""
+    if f.level_gap_at_anchor is not None:
+        chn0, jpn0 = f.level_gap_at_anchor
+        pct = f" ({chn0 / jpn0:.0%} of Japan)" if jpn0 else ""
+        lead = f"Level at anchor: China {chn0:,.0f} vs. Japan {jpn0:,.0f}{pct}. "
+    unit_word = {
+        "slope": "cumulative log-change",
+        "indexed_to_anchor": "index (100 = anchor)",
+    }.get(f.compare_as, "value")
+
     if f.chn_at_ref is None or f.jpn_at_ref is None:
         gap = "no matched-t Japan observation at the reference point"
     else:
         gap = (
-            f"China {f.chn_at_ref:.1f} vs. Japan {f.jpn_at_ref:.1f} at the same t "
-            f"— China is <b>{f.direction}</b>"
+            f"{unit_word} at t={f.reference_t}: China {f.chn_at_ref:.2f} vs. "
+            f"Japan {f.jpn_at_ref:.2f} — China is <b>{f.direction}</b>"
         )
     fwd = ""
     if f.jpn_forward:
         lo, hi = min(f.jpn_forward), max(f.jpn_forward)
         fwd = (
             f" Japan over its next {hi - f.reference_t} years from here: "
-            f"{f.jpn_forward[lo]:.1f} → {f.jpn_forward[hi]:.1f} "
+            f"{f.jpn_forward[lo]:.2f} → {f.jpn_forward[hi]:.2f} "
             f"(precedent, not a forecast)."
         )
     return (
-        f"<b>{f.label}.</b> At China's latest data (t={f.reference_t}, ~{ref_year}), "
-        f"{f.n_overlap} overlapping years: {gap}.{fwd}"
+        f"<b>{f.label}.</b> {lead}At China's latest data (t={f.reference_t}, "
+        f"~{ref_year}); {f.n_pre} pre-anchor, {f.n_post} post-anchor overlapping "
+        f"years: {gap}.{fwd}"
     )
 
 
-def _conclusions_html(alignment: Alignment, method: str) -> str:
+def _conclusions_html(
+    alignment: Alignment, method: str, findings: list[Finding]
+) -> str:
     analyzer = ANALYZERS[method]
-    findings = analyzer(prepared_panels(alignment), alignment)
     if not findings:
         return ""
 
@@ -239,7 +252,8 @@ def _conclusions_html(alignment: Alignment, method: str) -> str:
         "report states where China sits relative to it and where Japan went next; "
         "it does not score similarity or assign a probability. Overlap is counted "
         f"only in the shared analysis window t={ANALYSIS_WINDOW[0]}.."
-        f"{ANALYSIS_WINDOW[1]}.</p>"
+        f"{ANALYSIS_WINDOW[1]}, split pre/post anchor; a direction is stated only "
+        "where there are enough post-anchor overlapping years.</p>"
         "<p style='margin:0 0 4px'><b>China vs. Japan at matched t, by indicator "
         "and anchor preset</b> — a direction that flips between presets depends on "
         "how the timelines are aligned:</p>"
@@ -252,10 +266,80 @@ def _conclusions_html(alignment: Alignment, method: str) -> str:
     )
 
 
+def _cache_manifest() -> dict:
+    """Anchor-independent snapshot of the data behind the report: per series its
+    provenance, source, row count, year range and (for a live parquet) sha256."""
+    out = {}
+    for s in SERIES:
+        entry = {"source": s.source, "provenance": datastore.provenance(s.key)}
+        try:
+            df = datastore.read(s.key)
+            entry.update(
+                rows=int(len(df)),
+                year_min=int(df["year"].min()),
+                year_max=int(df["year"].max()),
+            )
+        except FileNotFoundError:
+            entry.update(rows=0, year_min=None, year_max=None)
+        pq = datastore.DATA_DIR / f"{s.key}.parquet"
+        entry["sha256"] = (
+            hashlib.sha256(pq.read_bytes()).hexdigest() if pq.exists() else None
+        )
+        out[s.key] = entry
+    return out
+
+
+def write_side_outputs(
+    alignment: Alignment,
+    method: str,
+    findings: list[Finding],
+    findings_label: str,
+    out_dir: Path,
+) -> list[Path]:
+    """Write the reviewable JSON next to the HTML: the findings for this
+    alignment, and the anchor-independent cache manifest."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    findings_path = out_dir / f"findings.{findings_label}.json"
+    findings_path.write_text(
+        json.dumps(
+            {
+                "generated": _dt.datetime.now().isoformat(timespec="seconds"),
+                "method": method,
+                "max_year": MAX_YEAR,
+                "analysis_window": list(ANALYSIS_WINDOW),
+                "alignment": {
+                    "label": alignment.label,
+                    "anchors": alignment.anchors,
+                },
+                "findings": [asdict(f) for f in findings],
+            },
+            indent=2,
+            default=str,
+        ),
+        encoding="utf-8",
+    )
+    manifest_path = out_dir / "cache_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "generated": _dt.datetime.now().isoformat(timespec="seconds"),
+                "series": _cache_manifest(),
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return [findings_path, manifest_path]
+
+
 def build_report(
-    alignment: Alignment, out_path: Path, method: str = "precedent"
+    alignment: Alignment,
+    out_path: Path,
+    method: str = "precedent",
+    findings_label: str = "custom",
 ) -> Path:
     fig, panels, seed_notes = make_figure(alignment)
+    findings = ANALYZERS[method](prepared_panels(alignment), alignment)
     any_live = any(prov == "live" for _, _, prov in panels)
     n_seed = sum(1 for _, _, prov in panels if prov == "seed")
     n_unknown = sum(1 for _, _, prov in panels if prov == "unknown")
@@ -289,7 +373,7 @@ def build_report(
         + f"observations after {MAX_YEAR} (the last completed calendar year) are excluded. "
         + f"Overlap is counted in the shared analysis window "
         + f"t={ANALYSIS_WINDOW[0]}..{ANALYSIS_WINDOW[1]}. "
-        + "The anchor choice drives the verdict — rebuild with "
+        + "The anchor choice drives the comparison — rebuild with "
         + "<code>--anchor workingage_peak</code> or explicit "
         + "<code>--anchor-jpn/--anchor-chn</code> to test alternatives. "
         + source_line
@@ -297,8 +381,11 @@ def build_report(
     )
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    html = fig.to_html(include_plotlyjs="inline", full_html=True)
-    html = html.replace("<body>", "<body>" + _conclusions_html(alignment, method), 1)
+    html = fig.to_html(include_plotlyjs="cdn", full_html=True)
+    html = html.replace(
+        "<body>", "<body>" + _conclusions_html(alignment, method, findings), 1
+    )
     html = html.replace("</body>", notes_html + "</body>")
     out_path.write_text(html, encoding="utf-8")
+    write_side_outputs(alignment, method, findings, findings_label, out_path.parent)
     return out_path

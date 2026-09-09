@@ -112,13 +112,52 @@ def _cmd_build(args: argparse.Namespace) -> int:
     except (KeyError, ValueError) as exc:
         print(f"anchor error: {exc}", file=sys.stderr)
         return 2
+    label = preset if preset and not overrides else "custom"
     out = Path(args.out) if args.out else (ARTIFACTS_DIR / "china_japan.html")
     try:
-        path = build_report(alignment, out, method=args.method)
+        path = build_report(alignment, out, method=args.method, findings_label=label)
     except (RuntimeError, KeyError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
     print(f"wrote {path}")
+    print(f"wrote {path.parent / f'findings.{label}.json'}")
+    print(f"wrote {path.parent / 'cache_manifest.json'}")
+    return 0
+
+
+def _cmd_verify(args: argparse.Namespace) -> int:
+    """Print, for each BIS series, the exact request URL(s) and three sample rows
+    from the cache, so a human can check them against the stats.bis.org UI.
+
+    The dev machine cannot reach BIS — this is a print-and-hand-off command. An
+    Action fetch exiting 0 means HTTP succeeded and rows parsed; it does not prove
+    the SDMX key selected the intended series.
+    """
+    from .sources import bis
+
+    any_bis = False
+    for s in SERIES:
+        if s.source != "bis":
+            continue
+        any_bis = True
+        print(f"\n=== {s.key} — {s.label} ({s.unit}) ===")
+        for country, url in bis.request_urls(s):
+            print(f"  {country}: {url}")
+        try:
+            df = datastore.read(s.key)
+        except FileNotFoundError:
+            print("  (no cache — run `toy-money pull-cache` first)")
+            continue
+        for country in sorted(df["country"].unique()):
+            g = df[df["country"] == country].sort_values("year")
+            picks = g.iloc[[0, len(g) // 2, -1]] if len(g) >= 3 else g
+            rows = ", ".join(
+                f"({r.country}, {int(r.year)}, {r.value:.3f})"
+                for r in picks.itertuples()
+            )
+            print(f"  sample {country}: {rows}")
+    if not any_bis:
+        print("no BIS series in SERIES")
     return 0
 
 
@@ -158,6 +197,13 @@ def main(argv: list[str] | None = None) -> int:
     pp.add_argument("--run", help="specific workflow run id (default: newest)")
     pp.add_argument("--repo", help="OWNER/REPO (default: the repo's origin remote)")
     pp.set_defaults(func=_cmd_pull_cache)
+
+    pv = sub.add_parser(
+        "verify",
+        help="print BIS request URLs + sample cache rows for a human to check "
+        "against stats.bis.org (the dev machine cannot reach BIS)",
+    )
+    pv.set_defaults(func=_cmd_verify)
 
     args = p.parse_args(argv)
     return args.func(args)

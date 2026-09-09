@@ -10,6 +10,19 @@ historical analogues, not backtesting** — there is no trading strategy. Phase 
 single vertical slice: **China now vs. Japan 1990s**, testing the claim that China is
 retracing Japan's post-bubble path.
 
+## Working rules
+
+- **Anchor years stay parameters.** In Phase B they become *rules computed from data*
+  (property-price peak, working-age-share peak), applied identically to every episode.
+  Never type a year into analysis code.
+- **No aggregate similarity score, no probability.** Findings carry numbers; the
+  report states them. n=1 precedent supports neither.
+- **No scoreboard in the headline.** Counting above/below directions is arithmetic,
+  but a reader takes a tally as a verdict. The headline names what was compared and
+  under which anchors; the per-indicator table carries the directions.
+- Every design decision is recorded under `## Decisions` below, one line + reason.
+- Social-media scraping and the RAG knowledge base stay out of scope.
+
 ## Commands
 
 ```bash
@@ -18,12 +31,13 @@ uv run toy-money fetch                   # refresh data cache (data/*.parquet)
 uv run toy-money fetch --source worldbank --force   # one source, ignore cache
 uv run toy-money fetch --source seed     # materialise bundled fallback snapshot
 uv run toy-money pull-cache              # download cache from the refresh-data Action (firewall workaround)
-uv run toy-money build                   # render artifacts/china_japan.html
+uv run toy-money verify                  # print BIS request URLs + sample rows for a human to check
+uv run toy-money build                   # render artifacts/china_japan.html + findings.<anchor>.json + cache_manifest.json
 uv run toy-money build --anchor workingage_peak     # alternate alignment
 uv run toy-money build --anchor-jpn 1991 --anchor-chn 2021   # explicit anchors
 uv run toy-money build --method precedent           # pick the analysis method
 uv run pytest -q                         # all tests
-uv run pytest tests/test_align.py::test_align_shifts_to_years_since_anchor
+uv run pytest tests/test_live_vs_seed.py -q         # live parquet vs seed (skips without a live cache)
 ```
 
 ## Network / firewall
@@ -76,7 +90,9 @@ Pipeline: `sources/*` fetch → `datastore` caches as parquet → `align` transf
   `provenance()` returns `live`, `seed`, `unknown` (parquet without a `.meta.json`), or
   `missing`; the report surfaces non-live panels.
 - **`align.py`**: re-expresses each country on a "years since anchor" axis
-  (`t = year - anchor[country]`); `apply_comparison_basis` then applies `compare_as`.
+  (`t = year - anchor[country]`); `apply_comparison_basis` then applies `compare_as`
+  (`level` unchanged; `indexed_to_anchor` → 100 at each country's anchor;
+  `slope` → `log(value / value_at_anchor)`, a cumulative log-change trajectory).
   `MAX_YEAR` is the last completed calendar year, so current-year IMF/BIS
   forecasts/partials are not treated as realised data.
 - **`analysis.py`**: turns aligned panels into stated conclusions. The **reference
@@ -86,25 +102,39 @@ Pipeline: `sources/*` fetch → `datastore` caches as parquet → `align` transf
   first. `Finding` is the stable contract the report renders — add a second method
   before generalising the interface, not before. **Deliberate non-features:** no
   aggregate similarity score; no probability (n=1 precedent); **no tracks/diverges
-  verdict** — that binary needs a similarity band, and every level-relative band is
-  scale-biased (a ~67-base indicator and a ~3-base one with the same shape agreement get
-  opposite verdicts). A `Finding` instead carries the numbers — `direction` (China vs
-  Japan at matched t), `n_overlap`, `jpn_forward` (Japan's next ≤10 years, *precedent
-  not forecast*) — and `verdict` is only `compared` or `indeterminate` (< `MIN_OVERLAP`
-  overlapping years, or no Japan observation at China's reference t). Overlap is counted
-  inside `ANALYSIS_WINDOW` (`t=-25..35`), the same window the figure shows. The headline
-  counts *directions* (arithmetic). The report recomputes `direction` under **all** anchor
-  presets; a direction that flips is the finding. **Remaining soft spot:** BIS dimension
-  values are validated against the returned CSV, but the flow/dimension choice still
-  needs a human check when a new BIS series is added.
+  verdict** (see Working rules); **no scoreboard in the headline**. A `Finding` carries
+  the numbers — `direction` (China vs Japan at matched t, using the per-series absolute
+  `Series.band` for a `crossing` call; `band=None` ⇒ above/below only),
+  `n_pre`/`n_post` (overlap split at the anchor), `jpn_forward` (Japan's next ≤10 years,
+  *precedent not forecast*), `level_gap_at_anchor` (for `compare_as="slope"`, where the
+  level gap is a finding in its own right). `verdict` is only `compared` or
+  `indeterminate` (**gate: `n_post >= MIN_POST`** — the hypothesis is about the
+  *post-anchor* path, so pre-anchor years do not count; also indeterminate when Japan
+  has no observation at China's reference t). Overlap is counted inside `ANALYSIS_WINDOW`
+  (`t=-25..35`), the same window the figure shows. The report recomputes `direction`
+  under **all** anchor presets; a direction that flips is the finding.
+  - `MIN_POST = 3` is a **placeholder** — a floor for "can say anything". Phase B1 sets
+    the comparison window per sub-hypothesis and this should follow from that.
+  - **Under `bubble_peak` every indicator has only ~5 post-anchor years** (China's 2021
+    anchor vs `MAX_YEAR`): thin for a *trajectory* claim. `workingage_peak` (2010) gives ~16.
 - **`report.py`**: `prepared_panels()` (from `analysis`) is the shared input for both
-  the figure and the analyzers. Chart follows the `dataviz` skill — shared x-axis
-  across the grid, CVD-validated palette, grey band marking t beyond China's data.
+  the figure and the analyzers; each `PreparedPanel` carries `df` (comparison-basis
+  applied) and `raw_df` (aligned, native units). Chart follows the `dataviz` skill —
+  shared x-axis, CVD-validated palette, grey band marking t beyond China's data.
+  `build` also writes `artifacts/findings.<anchor>.json` (per alignment) and
+  `artifacts/cache_manifest.json` (anchor-independent: provenance, rows, year range,
+  parquet sha256) — the reviewable outputs; the HTML (`include_plotlyjs="cdn"`) stays
+  gitignored.
+- **BIS trust chain**: `sources/bis.py` validates the dimension *values* the SDMX CSV
+  echoes back; `tests/test_live_vs_seed.py` (run in `refresh-data.yml`) catches a key
+  that parsed but returned the wrong series; `toy-money verify` prints the URLs + rows
+  for a human to check. The flow/dimension *choice* still needs that human check when a
+  new BIS series is added.
 
 ## Things that will bite you
 
 - **The anchor year is a parameter, never a hardcode.** Different anchors (bubble peak
-  vs. working-age-share peak vs. a chosen year) yield different verdicts on "is China
+  vs. working-age-share peak vs. a chosen year) yield different directions on "is China
   Japan". Analysis code must take the anchor as input; presets live in `config.py`.
 - **`data/` is a gitignored cache.** `fetch` writes it, `build` reads it. Never commit
   it. Deleting it is safe — `build` then reads the bundled fallback snapshot directly.
@@ -120,6 +150,31 @@ Pipeline: `sources/*` fetch → `datastore` caches as parquet → `align` transf
   `Series.note`; keep that caveat visible in any new youth-labour work.
 - **Japanese labour sources** (求人倍率 / MHLW) are Japanese-language; `grad_labor` is
   seed-only for now.
+
+## Decisions
+
+- **`compare_as="slope"` = `log(value / value_at_anchor)`** — the trajectory compares;
+  the anchor-level gap is recorded on the `Finding` (`level_gap_at_anchor`) and shown
+  in the panel text. The GDP-per-capita chart panel is therefore a log-change
+  trajectory, not "$ on a log axis". *Reason:* the config always said "the level gap
+  is itself a finding"; this makes both true.
+- **`Series.band` is absolute, per series, in native units** (`gdp_growth` 0.5 pp,
+  `workingage_share` 0.3 pp, `cpi_inflation` 0.5 pp, `gov_debt_gdp` 3, `credit_hh_gdp`
+  2, `credit_nfc_gdp` 3, `real_property_prices` 3, `youth_unemployment` 1;
+  `gdp_pc_ppp` `None`). *Reason:* a relative band is scale-biased — the module's own
+  objection; a `crossing` call should mean "within revision noise of equal".
+- **Verdict gate is `n_post >= MIN_POST`; `MIN_OVERLAP` deleted.** *Reason:* the
+  hypothesis is about the post-anchor path, so pre-anchor overlap must not decide the
+  verdict.
+- **`headline()` states scope only, no direction tally.** *Reason:* Working rules — a
+  reader takes a count as a verdict.
+- **Reviewable outputs = JSON, HTML stays gitignored.** `findings.<anchor>.json` +
+  `cache_manifest.json` committed; HTML switched to `include_plotlyjs="cdn"` (~40 KB)
+  but not committed. *Reason:* a single-line minified HTML blob is not a useful diff.
+- **`findings.<label>.json` is per anchor preset** (`custom` for explicit anchors);
+  `cache_manifest.json` is single (provenance/rows/years/sha256 are pre-alignment).
+- **`gov_debt_gdp.definition_note`**: IMF `GGXWDG_NGDP` is not definition-comparable
+  Japan-1990 vs China-now (LGFV / off-balance-sheet). Rendered with the panel.
 
 ## Scope boundary (Phase 1)
 
