@@ -1,0 +1,85 @@
+{
+  "generated": "2026-09-09T16:55:23",
+  "series": {
+    "gdp_growth": {
+      "source": "worldbank",
+      "provenance": "live",
+      "rows": 130,
+      "year_min": 1961,
+      "year_max": 2025,
+      "sha256": "947ef06bd1d8022466c451ae7b575f023cd09de2502d09c41672a22d53a71e1f"
+    },
+    "workingage_share": {
+      "source": "worldbank",
+      "provenance": "live",
+      "rows": 132,
+      "year_min": 1960,
+      "year_max": 2025,
+      "sha256": "8a0a8885c71ef2644615fffe3fe2f52caf45d5e13da1c7ee84fccfe0d792bcba"
+    },
+    "gdp_pc_ppp": {
+      "source": "worldbank",
+      "provenance": "live",
+      "rows": 72,
+      "year_min": 1990,
+      "year_max": 2025,
+      "sha256": "d1e7ab288b162e6e4cbe5bd8ad3cc0a04771311b8dd8fead4a8b5691e35eac5f"
+    },
+    "cpi_inflation": {
+      "source": "worldbank",
+      "provenance": "live",
+      "rows": 105,
+      "year_min": 1960,
+      "year_max": 2025,
+      "sha256": "8304e72308f001f4e37080a02d4a5a44a596acfd9e964b9ca189c1bc548a1422"
+    },
+    "gov_debt_gdp": {
+      "source": "imf",
+      "provenance": "live",
+      "rows": 89,
+      "year_min": 1980,
+      "year_max": 2031,
+      "sha256": "dbefb62c9580f6b7de8c84e40d00fe4a41fb493beee30d33e678554420115ad9"
+    },
+    "credit_hh_gdp": {
+      "source": "bis",
+      "provenance": "live",
+      "rows": 82,
+      "year_min": 1964,
+      "year_max": 2025,
+      "sha256": "85828467b758beb9f5c7fc1f9df399ce3b94594f01788950f58b7216b1e42bba"
+    },
+    "credit_nfc_gdp": {
+      "source": "bis",
+      "provenance": "live",
+      "rows": 82,
+      "year_min": 1964,
+      "year_max": 2025,
+      "sha256": "a5ff0d01e93318defbcca2b3a5c8e1f9d7cf2e08502c1c51e5707d342770cdcc"
+    },
+    "real_property_prices": {
+      "source": "bis",
+      "provenance": "live",
+      "rows": 93,
+      "year_min": 1955,
+      "year_max": 2026,
+      "sha256": "04f43c438c0c6b0604a01edcd72cc3022a478909573b3e2e5c44e78735fd5583"
+    },
+    "youth_unemployment": {
+      "source": "worldbank",
+      "provenance": "live",
+      "rows": 70,
+      "year_min": 1991,
+      "year_max": 2025,
+      "sha256": "5565f3bb7722a5b10722d203085b740da8bdea592bc96d22a99407f5b4d3858a"
+    },
+    "grad_labor": {
+      "source": "seed",
+      "provenance": "seed",
+      "rows": 12,
+      "year_min": 1990,
+      "year_max": 2023,
+      "sha256": "61904edfef9d71e612eb9e439c5ea1f31482276340bc9b5330bebdbc7b18a528"
+    }
+  }
+}
