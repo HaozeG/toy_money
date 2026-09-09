@@ -5,9 +5,9 @@ name: refresh-data
 # stats.bis.org from the dev machine. Publishes the parquet cache as a workflow
 # artifact; pull it locally with `uv run toy-money pull-cache`.
 #
-# This run's log is the live integration test for sources/*.py. The latest run
-# fetched all provider-backed series; BIS now validates the dimension values in
-# the returned SDMX CSV, but adding a new BIS flow still needs a human check.
+# This run's log is the live integration test for sources/*.py. A branch run
+# fetched all provider-backed series and exercised BIS dimension validation
+# against the live SDMX CSV; adding a new BIS flow still needs a human check.
 
 on:
   workflow_dispatch:

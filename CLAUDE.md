@@ -48,9 +48,9 @@ Two ways to get live data:
    toy-money fetch` needs no code change (add `pysocks` for `socks5://`).
 
 The `refresh-data` Action log is the **live integration test** of `sources/*.py`.
-The latest run fetched all 9 provider-backed series successfully; the next run
-will exercise the new BIS dimension validation. The BIS flow/dimension choice
-still deserves a human review when adding a new series.
+The latest branch run fetched all 9 provider-backed series successfully and
+exercised the BIS dimension validation against the live SDMX CSV. The BIS
+flow/dimension choice still deserves a human review when adding a new series.
 
 ## Architecture
 
