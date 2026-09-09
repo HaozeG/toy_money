@@ -53,8 +53,9 @@ def align_series(
     """Add a `t` column = year - anchor[country]. Rows for unknown countries drop.
 
     Observations after `max_year` are dropped so IMF/BIS forward projections
-    (e.g. WEO runs to +5y) don't get plotted as if they were realised data —
-    the tool is about testing against *past* data.
+    (e.g. WEO runs to +5y) and current-year partials don't get plotted as if
+    they were realised data — the tool is about testing against *past* data.
+    `MAX_YEAR` defaults to the last completed calendar year.
     """
     df = df[df["country"].isin(alignment.anchors) & (df["year"] <= max_year)].copy()
     if df.empty:

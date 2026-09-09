@@ -11,14 +11,15 @@ from plotly.subplots import make_subplots
 
 from .align import Alignment, resolve_alignment
 from .analysis import ANALYZERS, Finding, headline, prepared_panels
-from .config import ANCHOR_PRESETS, COUNTRIES
+from .config import ANCHOR_PRESETS, ANALYSIS_WINDOW, COUNTRIES, MAX_YEAR
 
 # Categorical slots 1 & 2 from the data-viz reference palette (CVD-validated).
 _COLOR = {"CHN": "#2a78d6", "JPN": "#eb6834"}
 
-# Shared "years since anchor" window for every panel — a common analytical
-# coordinate only works if the axis is identical across the grid.
-_VIEW_T = (-25, 35)
+# Shared "years since anchor" window for every panel — the same window is used
+# for overlap counting in `analysis.precedent`, so the figure and the findings
+# make the same claim about comparability.
+_VIEW_T = ANALYSIS_WINDOW
 
 
 def _panels(alignment: Alignment):
@@ -119,8 +120,8 @@ def make_figure(alignment: Alignment):
         if prov == "seed":
             extra = f" {s.seed_note}" if s.seed_note else ""
             seed_notes.append(
-                f"<b>{s.label}:</b> hand-seeded approximate data — "
-                f"live fetch unavailable, not from the official provider.{extra}"
+                f"<b>{s.label}:</b> bundled fallback snapshot — live fetch "
+                f"unavailable, not refreshed from the provider.{extra}"
             )
 
     fig.update_xaxes(range=list(_VIEW_T), title_text="years since anchor", row=nrows, col=1)
@@ -166,8 +167,8 @@ def _finding_sentence(f: Finding, alignment: Alignment) -> str:
     ref_year = alignment.anchors["CHN"] + f.reference_t
     if f.verdict == "indeterminate":
         return (
-            f"<b>{f.label}.</b> Indeterminate — {f.rationale}; not enough "
-            "comparable history to read a precedent."
+            f"<b>{f.label}.</b> Indeterminate — {f.rationale}. "
+            "No direction is stated."
         )
     if f.chn_at_ref is None or f.jpn_at_ref is None:
         gap = "no matched-t Japan observation at the reference point"
@@ -236,7 +237,9 @@ def _conclusions_html(alignment: Alignment, method: str) -> str:
         f"<p style='color:#666;margin:0 0 10px'>Method: <code>{method}</code>. "
         "Reference point: China's latest observation. One precedent (Japan) — the "
         "report states where China sits relative to it and where Japan went next; "
-        "it does not score similarity or assign a probability.</p>"
+        "it does not score similarity or assign a probability. Overlap is counted "
+        f"only in the shared analysis window t={ANALYSIS_WINDOW[0]}.."
+        f"{ANALYSIS_WINDOW[1]}.</p>"
         "<p style='margin:0 0 4px'><b>China vs. Japan at matched t, by indicator "
         "and anchor preset</b> — a direction that flips between presets depends on "
         "how the timelines are aligned:</p>"
@@ -254,19 +257,26 @@ def build_report(
 ) -> Path:
     fig, panels, seed_notes = make_figure(alignment)
     any_live = any(prov == "live" for _, _, prov in panels)
-
     n_seed = sum(1 for _, _, prov in panels if prov == "seed")
-    if not any_live:
+    n_unknown = sum(1 for _, _, prov in panels if prov == "unknown")
+
+    if not any_live and n_seed == len(panels):
         source_line = (
-            "<b>All panels use hand-seeded approximate data</b> — no live fetch "
+            "<b>All panels use the bundled fallback snapshot</b> — no live fetch "
             "reached the official providers. Run <code>toy-money fetch</code> with "
             "network access for World Bank / IMF / BIS figures."
         )
-    elif n_seed:
-        source_line = (
-            f"Sources: World Bank, IMF DataMapper, BIS. {n_seed} panel(s) fell back "
-            "to hand-seeded data (flagged above)."
-        )
+    elif n_seed or n_unknown:
+        parts = ["Sources: World Bank, IMF DataMapper, BIS."]
+        if n_seed:
+            parts.append(
+                f"{n_seed} panel(s) use the bundled fallback snapshot (flagged above)."
+            )
+        if n_unknown:
+            parts.append(
+                f"{n_unknown} panel(s) have unknown provenance (missing .meta.json)."
+            )
+        source_line = " ".join(parts)
     else:
         source_line = "Sources: World Bank, IMF DataMapper, BIS."
 
@@ -276,7 +286,9 @@ def build_report(
         "color:#444;border-top:1px solid #ddd;padding-top:12px'>"
         + (f"<b>Data caveats</b><ul>{items}</ul>" if seed_notes else "")
         + f"<p style='color:#888'>Generated {_dt.date.today().isoformat()} by toy-money; "
-        + "observations after the current year (IMF/BIS forward projections) are excluded. "
+        + f"observations after {MAX_YEAR} (the last completed calendar year) are excluded. "
+        + f"Overlap is counted in the shared analysis window "
+        + f"t={ANALYSIS_WINDOW[0]}..{ANALYSIS_WINDOW[1]}. "
         + "The anchor choice drives the verdict — rebuild with "
         + "<code>--anchor workingage_peak</code> or explicit "
         + "<code>--anchor-jpn/--anchor-chn</code> to test alternatives. "

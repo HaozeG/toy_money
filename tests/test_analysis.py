@@ -48,6 +48,27 @@ def test_reference_point_is_china_latest_and_forward_is_japan_only():
     assert set(f.jpn_forward) == set(range(1, 11))
 
 
+def test_missing_japan_reference_is_indeterminate():
+    rows = [
+        r
+        for r in _matched(10, 10, 12)
+        if not (r[0] == "JPN" and r[1] == 1990)  # Japan lacks t=0
+    ]
+    (f,) = precedent([_panel("x", rows)], _AL)
+    assert f.n_overlap == 11
+    assert f.verdict == "indeterminate"
+    assert f.direction == "n/a"
+    assert "no Japan observation" in f.rationale
+
+
+def test_overlap_counts_only_analysis_window():
+    rows = [("CHN", 2021 + i, 1.0) for i in range(-30, 1)]
+    rows += [("JPN", 1990 + i, 1.0) for i in range(-30, 1)]
+    (f,) = precedent([_panel("x", rows)], _AL)
+    assert f.n_overlap == 26  # t=-25..0, not the full -30..0 intersection
+    assert "-25..35" in f.rationale
+
+
 def test_headline_counts_directions_only():
     panels = [
         _panel("a", _matched(120.0, 100.0, 12)),  # above
@@ -55,6 +76,9 @@ def test_headline_counts_directions_only():
         _panel("c", _matched(10, 10, 3)),  # indeterminate
     ]
     h = headline(precedent(panels, _AL))
-    assert "1 and below on 1 of 2" in h
-    assert "1 indeterminate" in h
+    assert "3 indicators: 2 comparable, 1 indeterminate" in h
+    assert "above Japan on 1" in h
+    assert "below on 1" in h
+    assert "crossing on 0" in h
+    assert "of 2" in h
     assert "track" not in h  # no similarity language

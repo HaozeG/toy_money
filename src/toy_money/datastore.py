@@ -46,12 +46,17 @@ def has(key: str) -> bool:
 
 
 def provenance(key: str) -> str:
-    """'live', 'seed', or 'missing' — where the currently-readable data comes from."""
+    """Where the currently-readable data comes from.
+
+    'live' / 'seed' for normal cache or bundled fallback, 'unknown' when a
+    parquet file exists without a readable provenance sidecar, 'missing' when
+    neither cache nor seed data exists.
+    """
     if _path(key).exists():
         try:
             return json.loads(_meta_path(key).read_text())["provenance"]
         except (FileNotFoundError, ValueError, KeyError):
-            return "live"
+            return "unknown"
     return "seed" if seed_frame(key) is not None else "missing"
 
 
@@ -72,7 +77,7 @@ _SEED_FILE = SEED_DIR / "seed.csv"
 
 
 def seed_frame(key: str) -> pd.DataFrame | None:
-    """Bundled offline fallback values, from seed/seed.csv (key,country,year,value)."""
+    """Bundled fallback values from seed/seed.csv (key,country,year,value)."""
     if not _SEED_FILE.exists():
         return None
     allrows = pd.read_csv(_SEED_FILE)

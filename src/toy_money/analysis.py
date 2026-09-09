@@ -10,8 +10,8 @@ A second method (DTW, regime classifier, an LLM judge, ...) returns the same
 
 Deliberate non-features:
 - No aggregate similarity score. Indicators have different units, different
-  overlap lengths, and one is seed-sourced; averaging them produces a number
-  that looks authoritative and means nothing.
+  overlap lengths, and mixed provenance; averaging them produces a number that
+  looks authoritative and means nothing.
 - No probability. n=1 precedent (Japan only).
 - **No automatic "tracks vs. diverges" verdict.** That binary needs a defensible
   similarity band, and any level-relative band is scale-biased: an indicator on a
@@ -21,6 +21,8 @@ Deliberate non-features:
   carries the numbers — where China sits relative to Japan at matched t, and
   Japan's subsequent path — and the reader judges similarity. The headline counts
   *directions*, which is arithmetic.
+- Overlap is counted only inside `ANALYSIS_WINDOW`, so the comparison does not
+  silently span China's pre-reform years and Japan's 1960s.
 """
 
 from __future__ import annotations
@@ -30,7 +32,7 @@ from dataclasses import dataclass, field
 import pandas as pd
 
 from .align import Alignment, align_series, apply_comparison_basis
-from .config import SERIES, Series
+from .config import ANALYSIS_WINDOW, SERIES, Series
 from . import datastore
 
 # Below this many overlapping-t years there is not enough comparable history to
@@ -85,6 +87,13 @@ def _series_by_country(df: pd.DataFrame, country: str) -> pd.Series:
     return g[~g.index.duplicated(keep="last")]
 
 
+def _overlap_t(chn: pd.Series, jpn: pd.Series) -> pd.Index:
+    """Common t values inside the shared analysis window."""
+    common = chn.index.intersection(jpn.index)
+    lo, hi = ANALYSIS_WINDOW
+    return common[(common >= lo) & (common <= hi)]
+
+
 def _direction(chn_ref: float | None, jpn_ref: float | None) -> str:
     """Where China sits relative to Japan at the reference point."""
     if chn_ref is None or jpn_ref is None:
@@ -98,8 +107,10 @@ def precedent(panels: list[PreparedPanel], alignment: Alignment) -> list[Finding
     """For each indicator, read off the Japan precedent from China's current
     position: where China sits vs. Japan at the same t, and where Japan went next.
 
-    No similarity verdict — see the module docstring. `verdict` is only
-    `indeterminate` (too little overlap to compare) or `compared`.
+    Overlap is counted only inside `ANALYSIS_WINDOW`, so the count reflects the
+    shared, economically comparable part of the two timelines rather than the
+    whole intersection. No similarity verdict — see the module docstring.
+    `verdict` is only `indeterminate` or `compared`.
     """
     findings: list[Finding] = []
     for p in panels:
@@ -108,7 +119,7 @@ def precedent(panels: list[PreparedPanel], alignment: Alignment) -> list[Finding
         if chn.empty or jpn.empty:
             continue
         ref_t = int(chn.index.max())
-        n = len(chn.index.intersection(jpn.index))
+        n = len(_overlap_t(chn, jpn))
         chn_ref = float(chn.loc[ref_t]) if ref_t in chn.index else None
         jpn_ref = float(jpn.loc[ref_t]) if ref_t in jpn.index else None
         jpn_forward = {
@@ -116,25 +127,43 @@ def precedent(panels: list[PreparedPanel], alignment: Alignment) -> list[Finding
             for t in jpn.index
             if ref_t < t <= ref_t + 10
         }
-        indeterminate = n < MIN_OVERLAP
+        if n < MIN_OVERLAP:
+            verdict = "indeterminate"
+            direction = "n/a"
+            rationale = (
+                f"only {n} overlapping years in t={ANALYSIS_WINDOW[0]}.."
+                f"{ANALYSIS_WINDOW[1]} (need {MIN_OVERLAP})"
+            )
+        elif jpn_ref is None:
+            # There is enough overlap, but Japan has no observation at the
+            # exact reference t, so no matched-t direction can be stated.
+            verdict = "indeterminate"
+            direction = "n/a"
+            rationale = (
+                f"{n} overlapping years, but no Japan observation at China's "
+                f"reference t={ref_t}"
+            )
+        else:
+            verdict = "compared"
+            direction = _direction(chn_ref, jpn_ref)
+            rationale = (
+                f"{n} overlapping years in t={ANALYSIS_WINDOW[0]}.."
+                f"{ANALYSIS_WINDOW[1]}"
+            )
         findings.append(
             Finding(
                 key=p.series.key,
                 label=p.series.label,
                 method="precedent",
-                verdict="indeterminate" if indeterminate else "compared",
-                direction="n/a" if indeterminate else _direction(chn_ref, jpn_ref),
+                verdict=verdict,
+                direction=direction,
                 n_overlap=n,
                 reference_t=ref_t,
                 chn_at_ref=chn_ref,
                 jpn_at_ref=jpn_ref,
                 jpn_forward=jpn_forward,
                 provenance=p.provenance,
-                rationale=(
-                    f"only {n} overlapping years (need {MIN_OVERLAP})"
-                    if indeterminate
-                    else f"{n} overlapping years"
-                ),
+                rationale=rationale,
             )
         )
     return findings
@@ -149,8 +178,15 @@ def headline(findings: list[Finding]) -> str:
     indet = len(findings) - len(compared)
     above = sum(f.direction == "above" for f in compared)
     below = sum(f.direction == "below" for f in compared)
-    tail = f", {indet} indeterminate" if indet else ""
+    crossing = sum(f.direction == "crossing" for f in compared)
+    if indet:
+        lead = (
+            f"{len(findings)} indicators: {len(compared)} comparable, "
+            f"{indet} indeterminate"
+        )
+    else:
+        lead = f"{len(findings)} indicators compared"
     return (
-        f"{len(findings)} indicators compared{tail}; at matched t China is "
-        f"above Japan on {above} and below on {below} of {len(compared)}"
+        f"{lead}; at matched t China is above Japan on {above}, below on {below}, "
+        f"and crossing on {crossing} of {len(compared)}"
     )

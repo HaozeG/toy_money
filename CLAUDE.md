@@ -16,7 +16,7 @@ retracing Japan's post-bubble path.
 uv sync --extra dev                      # set up the environment
 uv run toy-money fetch                   # refresh data cache (data/*.parquet)
 uv run toy-money fetch --source worldbank --force   # one source, ignore cache
-uv run toy-money fetch --source seed     # materialise offline seed data only
+uv run toy-money fetch --source seed     # materialise bundled fallback snapshot
 uv run toy-money pull-cache              # download cache from the refresh-data Action (firewall workaround)
 uv run toy-money build                   # render artifacts/china_japan.html
 uv run toy-money build --anchor workingage_peak     # alternate alignment
@@ -39,16 +39,18 @@ Two ways to get live data:
 1. **`toy-money pull-cache`** (default path). `.github/workflows/refresh-data.yml`
    runs `toy-money fetch` on GitHub's runners (outside the gateway) monthly / on
    `workflow_dispatch` and uploads a `data-cache` artifact (parquet **+**
-   `.meta.json` — the sidecars carry provenance; without them seed data would
-   claim official sources). `pull-cache` wraps `gh run download` to fetch it.
+   `.meta.json` — the sidecars carry provenance; without them `provenance()`
+   returns `unknown` and the report flags the panel). `pull-cache` wraps
+   `gh run download` to fetch it.
    Trigger a fresh run with `gh workflow run refresh-data.yml`.
 2. **HTTP(S) proxy**, if a tunnel is available: `_http.py` uses `requests`, which
    honours `HTTPS_PROXY` / `ALL_PROXY` automatically — `HTTPS_PROXY=… uv run
    toy-money fetch` needs no code change (add `pysocks` for `socks5://`).
 
-The `refresh-data` Action log is also the **first real integration test** of
-`sources/*.py` — those adapters were written against documented API shapes and
-have never seen a live response. BIS is most likely to need fixes.
+The `refresh-data` Action log is the **live integration test** of `sources/*.py`.
+The latest run fetched all 9 provider-backed series successfully; the next run
+will exercise the new BIS dimension validation. The BIS flow/dimension choice
+still deserves a human review when adding a new series.
 
 ## Architecture
 
@@ -64,14 +66,19 @@ Pipeline: `sources/*` fetch → `datastore` caches as parquet → `align` transf
   thing per indicator without re-deriving the economics.
 - **`sources/`**: one adapter per provider, each exposing
   `fetch(series) -> DataFrame[country, year, value]`. World Bank and IMF DataMapper are
-  keyless. BIS uses the SDMX CSV API — its dimension keys in `sources/bis.py` are
-  best-effort and marked to VERIFY against https://stats.bis.org. FRED
-  (`sources/fred.py`) is **optional**: used only when `FRED_API_KEY` is set, not wired
-  into the default `SERIES`.
+  keyless. BIS uses the SDMX CSV API; `bis.py` validates the dimension values the API
+  echoes back (country, borrower type, valuation, unit) so a wrong key cannot silently
+  masquerade as a correct series. A new BIS flow still needs a human check against
+  https://stats.bis.org. FRED (`sources/fred.py`) is **optional**: used only when
+  `FRED_API_KEY` is set, not wired into the default `SERIES`.
 - **`datastore.py`**: canonical schema is `[country, year, value]` (annual). `read()`
   falls back to bundled `src/toy_money/seed/seed.csv` when a series is not cached.
+  `provenance()` returns `live`, `seed`, `unknown` (parquet without a `.meta.json`), or
+  `missing`; the report surfaces non-live panels.
 - **`align.py`**: re-expresses each country on a "years since anchor" axis
   (`t = year - anchor[country]`); `apply_comparison_basis` then applies `compare_as`.
+  `MAX_YEAR` is the last completed calendar year, so current-year IMF/BIS
+  forecasts/partials are not treated as realised data.
 - **`analysis.py`**: turns aligned panels into stated conclusions. The **reference
   point is China's latest observation** — every `Finding` answers "given where China is
   now, what does the Japan precedent say?". An analyzer is any
@@ -84,10 +91,12 @@ Pipeline: `sources/*` fetch → `datastore` caches as parquet → `align` transf
   opposite verdicts). A `Finding` instead carries the numbers — `direction` (China vs
   Japan at matched t), `n_overlap`, `jpn_forward` (Japan's next ≤10 years, *precedent
   not forecast*) — and `verdict` is only `compared` or `indeterminate` (< `MIN_OVERLAP`
-  overlapping years). The headline counts *directions* (arithmetic). The report
-  recomputes `direction` under **all** anchor presets; a direction that flips is the
-  finding. **Soft spot:** the 3 BIS series use SDMX keys that were guessed and returned
-  plausible-looking data but are unverified against stats.bis.org.
+  overlapping years, or no Japan observation at China's reference t). Overlap is counted
+  inside `ANALYSIS_WINDOW` (`t=-25..35`), the same window the figure shows. The headline
+  counts *directions* (arithmetic). The report recomputes `direction` under **all** anchor
+  presets; a direction that flips is the finding. **Remaining soft spot:** BIS dimension
+  values are validated against the returned CSV, but the flow/dimension choice still
+  needs a human check when a new BIS series is added.
 - **`report.py`**: `prepared_panels()` (from `analysis`) is the shared input for both
   the figure and the analyzers. Chart follows the `dataviz` skill — shared x-axis
   across the grid, CVD-validated palette, grey band marking t beyond China's data.
@@ -98,10 +107,14 @@ Pipeline: `sources/*` fetch → `datastore` caches as parquet → `align` transf
   vs. working-age-share peak vs. a chosen year) yield different verdicts on "is China
   Japan". Analysis code must take the anchor as input; presets live in `config.py`.
 - **`data/` is a gitignored cache.** `fetch` writes it, `build` reads it. Never commit
-  it. Deleting it is safe — `build` then reads seed data directly.
-- **Seed data is approximate.** `seed/seed.csv` is hand-entered from national sources
-  so the tool runs offline; it is not a substitute for a real `fetch`. When `fetch`
-  can't reach a provider it writes the seed values into the cache with a `WARN`.
+  it. Deleting it is safe — `build` then reads the bundled fallback snapshot directly.
+- **Seed data is a fallback snapshot, not live data.** `seed/seed.csv` contains a
+  snapshot of provider-backed series plus hand-seeded `grad_labor`; see
+  `seed/README.md`. It is not a substitute for a real `fetch`. When `fetch` can't reach
+  a provider it writes the fallback values into the cache with a `WARN`.
+- **Current-year forecasts are not history.** `MAX_YEAR` excludes the current calendar
+  year, and overlap is counted only in `ANALYSIS_WINDOW`; if you change either, update
+  the report footer and tests together.
 - **China youth-unemployment methodology break (2023):** NBS suspended the 16–24 urban
   series mid-2023 and resumed in 2024 excluding students. The report annotates this via
   `Series.note`; keep that caveat visible in any new youth-labour work.

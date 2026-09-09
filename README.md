@@ -27,7 +27,7 @@ static HTML report.
 
 ```bash
 uv sync --extra dev
-uv run toy-money fetch          # populate data/ cache (falls back to bundled seed data offline)
+uv run toy-money fetch          # populate data/ cache
 uv run toy-money build          # -> artifacts/china_japan.html
 uv run toy-money build --anchor workingage_peak   # try a different alignment
 ```
@@ -40,10 +40,16 @@ gh workflow run refresh-data.yml    # fetch on GitHub's runners
 uv run toy-money pull-cache         # download the parquet cache locally
 ```
 
+The latest `refresh-data` run fetched all 9 provider-backed series live. The cache is
+not committed; if it is absent, `build` uses the bundled fallback snapshot in
+`src/toy_money/seed/seed.csv` (clearly marked as non-live in the report).
+
 The comparison hinges on the **anchor year** (when do the two timelines line up?), which
 is a parameter with named presets — `bubble_peak` (JPN 1990 ↔ CHN 2021) and
 `workingage_peak` (JPN 1992 ↔ CHN 2010). Different anchors give different verdicts; that
-is the point. See `CLAUDE.md` for architecture and data caveats.
+is the point. Builds exclude the current calendar year (IMF/BIS forecasts/partials) and
+count overlap in the shared analysis window `t=-25..35`. See `CLAUDE.md` for architecture
+and data caveats.
 
 Deferred to later phases: social-media topic scraping, the RAG knowledge base.
 

@@ -2,6 +2,7 @@ import pandas as pd
 import pytest
 
 from toy_money.align import align_series, resolve_alignment
+from toy_money.config import MAX_YEAR
 
 
 def test_preset_resolves():
@@ -35,6 +36,18 @@ def test_align_drops_projection_years():
     )
     out = align_series(df, resolve_alignment("bubble_peak"), max_year=2026)
     assert set(out["year"]) == {1990, 2021}
+
+
+def test_align_drops_current_year_forecasts_by_default():
+    df = pd.DataFrame(
+        {
+            "country": ["CHN", "CHN"],
+            "year": [MAX_YEAR, MAX_YEAR + 1],
+            "value": [1.0, 2.0],
+        }
+    )
+    out = align_series(df, resolve_alignment("bubble_peak"))
+    assert set(out["year"]) == {MAX_YEAR}
 
 
 def test_align_shifts_to_years_since_anchor():

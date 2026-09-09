@@ -131,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
         "--source",
         default="all",
         choices=["all", "seed", *sources.SOURCE_NAMES],
-        help="limit fetch to one source (default: all)",
+        help="limit fetch to one source (default: all; 'seed' writes the bundled snapshot)",
     )
     pf.add_argument("--force", action="store_true", help="re-download cached series")
     pf.set_defaults(func=_cmd_fetch)

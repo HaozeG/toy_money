@@ -3,10 +3,12 @@
 Endpoint: https://stats.bis.org/api/v1/data/{flow}/{key}/all?format=csv
 Returns SDMX 2.1 CSV: one column per dimension plus TIME_PERIOD and OBS_VALUE.
 
-The exact dimension keys below are best-effort and marked VERIFY in config.py —
-confirm against https://stats.bis.org before trusting fetched values. When the
-query key is wrong the API returns 404/empty and `fetch` raises, so `toy-money
-fetch` falls back to the bundled seed CSV.
+The dimension keys are verified against the returned SDMX CSV: `fetch` checks
+the dimension columns the API echoes back (country, borrower type, valuation,
+unit) and raises if the key resolved to something other than the intended
+series. That is stricter than "the request returned rows", though a full
+semantic check against BIS metadata still requires a human review when a new
+flow is added.
 
 Quarterly observations are collapsed to an annual mean.
 """
@@ -31,10 +33,50 @@ _SPP_KEY = "Q.{cty}.R.628"
 _ISO2 = {"CHN": "CN", "JPN": "JP"}
 
 
-def _fetch_one(flow: str, key: str) -> pd.DataFrame:
+def _expected_dimensions(dataset: str, cty: str, borrowers: str) -> dict[str, str]:
+    if dataset == "WS_SPP":
+        return {"FREQ": "Q", "REF_AREA": cty, "VALUE": "R", "UNIT_MEASURE": "628"}
+    return {
+        "FREQ": "Q",
+        "BORROWERS_CTY": cty,
+        "TC_BORROWERS": borrowers,
+        "TC_LENDERS": "A",
+        "VALUATION": "M",
+        "UNIT_TYPE": "770",
+    }
+
+
+def _validate_dimensions(flow: str, raw: pd.DataFrame, expected: dict[str, str]) -> None:
+    """Ensure the returned SDMX CSV matches the key we asked for."""
+    cols = {str(c).upper(): c for c in raw.columns}
+    found: list[str] = []
+    mismatches: list[str] = []
+    for dim, want in expected.items():
+        col = cols.get(dim.upper())
+        if col is None:
+            continue
+        found.append(dim)
+        values = raw[col].dropna().astype(str).str.strip().unique()
+        if len(values) != 1 or values[0] != str(want):
+            mismatches.append(f"{dim}={values.tolist()} (expected {want!r})")
+    missing = [dim for dim in expected if dim not in found]
+    if mismatches:
+        raise RuntimeError(
+            f"BIS {flow}: query key did not resolve to the intended series: "
+            + "; ".join(mismatches)
+        )
+    if missing:
+        raise RuntimeError(
+            f"BIS {flow}: missing expected dimension columns {missing}; "
+            f"got {list(raw.columns)}"
+        )
+
+
+def _fetch_one(flow: str, key: str, expected: dict[str, str]) -> pd.DataFrame:
     url = f"{BASE}/{flow}/{key}/all"
     text = get_text(url, params={"format": "csv"})
     raw = pd.read_csv(io.StringIO(text))
+    _validate_dimensions(flow, raw, expected)
     cols = {c.upper(): c for c in raw.columns}
     time_col = cols.get("TIME_PERIOD") or cols.get("TIME")
     val_col = cols.get("OBS_VALUE") or cols.get("VALUE")
@@ -63,7 +105,8 @@ def fetch(series: Series) -> pd.DataFrame:
             key = _SPP_KEY.format(cty=cty)
         else:
             key = _TC_KEY.format(cty=cty, borrowers=series.params.get("borrowers", "P"))
-        df = _fetch_one(dataset, key)
+        expected = _expected_dimensions(dataset, cty, series.params.get("borrowers", "P"))
+        df = _fetch_one(dataset, key, expected)
         df["country"] = iso3
         frames.append(df[["country", "year", "value"]])
     combined = pd.concat(frames, ignore_index=True)

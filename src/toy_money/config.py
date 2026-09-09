@@ -12,9 +12,16 @@ import datetime as _dt
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# Observations after this year are treated as projections and dropped at build
-# time (IMF WEO, some BIS series publish forward estimates).
-MAX_YEAR = _dt.date.today().year
+# The tool compares realised history, so stop at the last completed calendar
+# year. IMF WEO and some BIS series publish current-year forecasts/partials;
+# including them would make "China's latest observation" a projection.
+LAST_COMPLETED_YEAR = _dt.date.today().year - 1
+MAX_YEAR = LAST_COMPLETED_YEAR
+
+# Shared analytical window, in years since each country's anchor. The figure
+# and the overlap test use the same window so we do not claim comparability
+# across the entire available history (e.g. China pre-reform vs. Japan 1960s).
+ANALYSIS_WINDOW = (-25, 35)
 
 # --- paths -------------------------------------------------------------------
 

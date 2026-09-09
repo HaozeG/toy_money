@@ -47,6 +47,14 @@ def test_provenance_tracks_write_and_seed_fallback(tmp_path, monkeypatch):
     assert datastore.provenance("no_such_key") == "missing"
 
 
+def test_provenance_unknown_without_sidecar(tmp_path, monkeypatch):
+    monkeypatch.setattr(datastore, "DATA_DIR", tmp_path)
+    df = pd.DataFrame({"country": ["JPN"], "year": [1990], "value": [4.9]})
+    datastore.write("demo", df)
+    datastore._meta_path("demo").unlink()
+    assert datastore.provenance("demo") == "unknown"
+
+
 def test_every_series_has_seed_data():
     for s in SERIES:
         assert datastore.seed_frame(s.key) is not None, f"no seed rows for {s.key}"
