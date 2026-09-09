@@ -95,28 +95,20 @@ Pipeline: `sources/*` fetch → `datastore` caches as parquet → `align` transf
   `slope` → `log(value / value_at_anchor)`, a cumulative log-change trajectory).
   `MAX_YEAR` is the last completed calendar year, so current-year IMF/BIS
   forecasts/partials are not treated as realised data.
-- **`analysis.py`**: turns aligned panels into stated conclusions. The **reference
-  point is China's latest observation** — every `Finding` answers "given where China is
-  now, what does the Japan precedent say?". An analyzer is any
-  `(panels, alignment) -> list[Finding]`; register it in `ANALYZERS`. `precedent` is the
-  first. `Finding` is the stable contract the report renders — add a second method
-  before generalising the interface, not before. **Deliberate non-features:** no
-  aggregate similarity score; no probability (n=1 precedent); **no tracks/diverges
-  verdict** (see Working rules); **no scoreboard in the headline**. A `Finding` carries
-  the numbers — `direction` (China vs Japan at matched t, using the per-series absolute
-  `Series.band` for a `crossing` call; `band=None` ⇒ above/below only),
-  `n_pre`/`n_post` (overlap split at the anchor), `jpn_forward` (Japan's next ≤10 years,
-  *precedent not forecast*), `level_gap_at_anchor` (for `compare_as="slope"`, where the
-  level gap is a finding in its own right). `verdict` is only `compared` or
-  `indeterminate` (**gate: `n_post >= MIN_POST`** — the hypothesis is about the
-  *post-anchor* path, so pre-anchor years do not count; also indeterminate when Japan
-  has no observation at China's reference t). Overlap is counted inside `ANALYSIS_WINDOW`
-  (`t=-25..35`), the same window the figure shows. The report recomputes `direction`
-  under **all** anchor presets; a direction that flips is the finding.
-  - `MIN_POST = 3` is a **placeholder** — a floor for "can say anything". Phase B1 sets
-    the comparison window per sub-hypothesis and this should follow from that.
-  - **Under `bubble_peak` every indicator has only ~5 post-anchor years** (China's 2021
-    anchor vs `MAX_YEAR`): thin for a *trajectory* claim. `workingage_peak` (2010) gives ~16.
+- **`analysis.py`**: aligned panels → `Finding`s. Reference point = **China's latest
+  observation**. An analyzer is `(panels, alignment) -> list[Finding]`, registered in
+  `ANALYZERS`; `Finding` is the stable contract (don't generalise the interface before
+  a second analyzer). **Non-features:** no similarity score, no probability, no
+  tracks/diverges verdict, no headline scoreboard (see Working rules). A `Finding`
+  carries: `direction` (China vs Japan at the reference t; `crossing` if within the
+  per-series absolute `Series.band`, else above/below; `band=None` ⇒ above/below only),
+  `n_pre`/`n_post`, `jpn_forward` (Japan's next ≤10y, *precedent not forecast*),
+  `level_gap_at_anchor` (slope series). `verdict` is `compared` or `indeterminate`;
+  **gate is `n_post >= MIN_POST`** (the hypothesis is about the post-anchor path) or no
+  Japan obs at the reference t. Overlap counted inside `ANALYSIS_WINDOW`.
+  - `MIN_POST = 3` is a **placeholder** — Phase B1 sets the window per sub-hypothesis.
+  - **`bubble_peak` gives ~5 post-anchor years** (China 2021 vs `MAX_YEAR`): thin for a
+    trajectory claim. `workingage_peak` (2010) gives ~16.
 - **`report.py`**: `prepared_panels()` (from `analysis`) is the shared input for both
   the figure and the analyzers; each `PreparedPanel` carries `df` (comparison-basis
   applied) and `raw_df` (aligned, native units). Chart follows the `dataviz` skill —
@@ -125,15 +117,12 @@ Pipeline: `sources/*` fetch → `datastore` caches as parquet → `align` transf
   `artifacts/cache_manifest.json` (anchor-independent: provenance, rows, year range,
   parquet sha256) — the reviewable outputs; the HTML (`include_plotlyjs="cdn"`) stays
   gitignored.
-- **BIS trust chain**: `sources/bis.py` `_validate_dimensions` rejects a response
-  whose echoed dimension columns don't match the requested key.
-  `tests/test_live_vs_seed.py` (run in `refresh-data.yml`) catches **divergence from
-  the seed snapshot** — a provider revision or a key that *starts* returning different
-  values — but not original wrong-key selection, since the provider-backed seed rows
-  are themselves a snapshot of an earlier fetch through the same code
-  (`seed/README.md`). `toy-money verify` prints URLs + rows for a human to check the
-  dimension *choice* against stats.bis.org — **the only check on the choice itself**,
-  and it needs re-running when a new BIS series is added.
+- **BIS trust chain**: `sources/bis.py` rejects a response whose dimension columns
+  don't match the request. `tests/test_live_vs_seed.py` (in `refresh-data.yml`) catches
+  divergence from the seed snapshot — but not an always-wrong key, since the seed is a
+  snapshot of an earlier fetch with the same keys (`seed/README.md`). `toy-money verify`
+  prints URLs + rows for a human — **the only check on the dimension choice**; re-run it
+  for any new BIS series.
 
 ## Things that will bite you
 

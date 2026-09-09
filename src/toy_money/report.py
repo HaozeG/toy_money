@@ -163,44 +163,8 @@ _DIR_STYLE = {
 }
 
 
-def _finding_sentence(f: Finding, alignment: Alignment) -> str:
-    ref_year = alignment.anchors["CHN"] + f.reference_t
-    if f.verdict == "indeterminate":
-        return (
-            f"<b>{f.label}.</b> Indeterminate — {f.rationale}. "
-            "No direction is stated."
-        )
-
-    lead = ""
-    if f.level_gap_at_anchor is not None:
-        chn0, jpn0 = f.level_gap_at_anchor
-        pct = f" ({chn0 / jpn0:.0%} of Japan)" if jpn0 else ""
-        lead = f"Level at anchor: China {chn0:,.0f} vs. Japan {jpn0:,.0f}{pct}. "
-    unit_word = {
-        "slope": "cumulative log-change",
-        "indexed_to_anchor": "index (100 = anchor)",
-    }.get(f.compare_as, "value")
-
-    if f.chn_at_ref is None or f.jpn_at_ref is None:
-        gap = "no matched-t Japan observation at the reference point"
-    else:
-        gap = (
-            f"{unit_word} at t={f.reference_t}: China {f.chn_at_ref:.2f} vs. "
-            f"Japan {f.jpn_at_ref:.2f} — China is <b>{f.direction}</b>"
-        )
-    fwd = ""
-    if f.jpn_forward:
-        lo, hi = min(f.jpn_forward), max(f.jpn_forward)
-        fwd = (
-            f" Japan over its next {hi - f.reference_t} years from here: "
-            f"{f.jpn_forward[lo]:.2f} → {f.jpn_forward[hi]:.2f} "
-            f"(precedent, not a forecast)."
-        )
-    return (
-        f"<b>{f.label}.</b> {lead}At China's latest data (t={f.reference_t}, "
-        f"~{ref_year}); {f.n_pre} pre-anchor, {f.n_post} post-anchor overlapping "
-        f"years: {gap}.{fwd}"
-    )
+def _num(v: float | None) -> str:
+    return "–" if v is None else f"{v:.1f}"
 
 
 def _conclusions_html(
@@ -210,57 +174,81 @@ def _conclusions_html(
     if not findings:
         return ""
 
-    # Anchor-sensitivity matrix: China's direction vs. Japan at matched t,
-    # recomputed under every preset. A direction that flips between presets means
-    # the comparison depends on how the timelines are aligned. Reuse the active
-    # alignment's findings where a preset matches.
+    # Direction under every preset (a flip between presets = the comparison
+    # depends on the alignment). Reuse the active findings where a preset matches.
     presets = list(ANCHOR_PRESETS)
-    matrix: dict[str, dict[str, str]] = {}
+    active = next(
+        (n for n in presets if resolve_alignment(n).anchors == alignment.anchors),
+        None,
+    )
+    by_preset: dict[str, dict[str, str]] = {}
     for name in presets:
         al = resolve_alignment(name)
-        fs = (
-            findings
-            if al.anchors == alignment.anchors
-            else analyzer(prepared_panels(al), al)
-        )
+        fs = findings if name == active else analyzer(prepared_panels(al), al)
         for f in fs:
-            matrix.setdefault(f.key, {})[name] = f.direction
+            by_preset.setdefault(f.key, {})[name] = f.direction
 
-    rows = ""
-    for f in findings:
-        cells = "".join(
-            f"<td style='{_DIR_STYLE.get(matrix.get(f.key, {}).get(n, ''), '')};"
+    ref_t = findings[0].reference_t
+    ref_year = alignment.anchors["CHN"] + ref_t
+
+    def row(f: Finding) -> str:
+        name = f.label
+        if f.level_gap_at_anchor is not None:
+            chn0, jpn0 = f.level_gap_at_anchor
+            name += (
+                f" <span style='color:#888'>(log-change; {chn0:,.0f} vs "
+                f"{jpn0:,.0f} at anchor)</span>"
+            )
+        if f.jpn_forward:
+            hi = max(f.jpn_forward)
+            fwd = f"{_num(f.jpn_at_ref)} → {f.jpn_forward[hi]:.1f}"
+        else:
+            fwd = "–"
+        pres = "".join(
+            f"<td style='{_DIR_STYLE.get(by_preset[f.key].get(n, ''), '')};"
             f"text-align:center;padding:3px 8px'>"
-            f"{matrix.get(f.key, {}).get(n, '–')}</td>"
+            f"{by_preset[f.key].get(n, '–')}</td>"
             for n in presets
         )
-        rows += f"<tr><td style='padding:3px 8px'>{f.label}</td>{cells}</tr>"
-    head = "".join(f"<th style='padding:3px 8px'>{n}</th>" for n in presets)
+        return (
+            f"<tr><td style='padding:3px 8px'>{name}</td>"
+            f"<td style='text-align:right;padding:3px 8px'>{_num(f.chn_at_ref)}</td>"
+            f"<td style='text-align:right;padding:3px 8px'>{_num(f.jpn_at_ref)}</td>"
+            f"<td style='text-align:right;padding:3px 8px'>{fwd}</td>"
+            f"<td style='text-align:center;padding:3px 8px'>{f.n_post}</td>"
+            f"{pres}</tr>"
+        )
 
-    sentences = "".join(
-        f"<li style='margin:6px 0'>{_finding_sentence(f, alignment)}</li>"
-        for f in findings
+    body = "".join(row(f) for f in findings)
+    head = "".join(
+        f"<th style='padding:3px 8px'>{'<b>' + n + '</b>' if n == active else n}</th>"
+        for n in presets
+    )
+    indet = [f.label for f in findings if f.verdict == "indeterminate"]
+    indet_note = (
+        f"<p style='color:#888;margin:6px 0 0'>Indeterminate (too few post-anchor "
+        f"years): {', '.join(indet)}.</p>"
+        if indet
+        else ""
     )
 
     return (
-        "<div style='max-width:1100px;margin:16px auto 0;font:14px/1.55 system-ui;"
+        "<div style='max-width:1100px;margin:16px auto 0;font:14px/1.5 system-ui;"
         "color:#222'>"
-        f"<h2 style='margin:0 0 2px'>Conclusion</h2>"
+        "<h2 style='margin:0 0 2px'>Conclusion</h2>"
         f"<p style='margin:0 0 4px'>{headline(findings)}.</p>"
-        f"<p style='color:#666;margin:0 0 10px'>Method: <code>{method}</code>. "
-        "Reference point: China's latest observation. One precedent (Japan) — the "
-        "report states where China sits relative to it and where Japan went next; "
-        "it does not score similarity or assign a probability. Overlap is counted "
-        f"only in the shared analysis window t={ANALYSIS_WINDOW[0]}.."
-        f"{ANALYSIS_WINDOW[1]}, split pre/post anchor; a direction is stated only "
-        "where there are enough post-anchor overlapping years.</p>"
-        "<p style='margin:0 0 4px'><b>China vs. Japan at matched t, by indicator "
-        "and anchor preset</b> — a direction that flips between presets depends on "
-        "how the timelines are aligned:</p>"
+        f"<p style='color:#666;margin:0 0 10px'>Method <code>{method}</code>; "
+        f"reference = China's latest year (t={ref_t}, {ref_year}). Columns: value "
+        "at that t for each country, Japan's value +10y from there, post-anchor "
+        "overlapping years, and China's direction vs. Japan under each anchor "
+        "(<b>bold</b> = this build). The chart shows the full paths.</p>"
         "<table style='border-collapse:collapse;font-size:13px;margin-bottom:14px'>"
-        f"<tr><th style='padding:3px 8px;text-align:left'>indicator</th>{head}</tr>"
-        f"{rows}</table>"
-        f"<ul style='margin:0;padding-left:18px'>{sentences}</ul>"
+        "<tr><th style='padding:3px 8px;text-align:left'>indicator</th>"
+        "<th style='padding:3px 8px'>China</th><th style='padding:3px 8px'>Japan</th>"
+        "<th style='padding:3px 8px'>Japan +10y</th>"
+        "<th style='padding:3px 8px'>n post</th>"
+        f"{head}</tr>"
+        f"{body}</table>{indet_note}"
         "</div><hr style='max-width:1100px;margin:18px auto;border:none;"
         "border-top:1px solid #ddd'>"
     )
@@ -299,11 +287,12 @@ def write_side_outputs(
     """Write the reviewable JSON next to the HTML: the findings for this
     alignment, and the anchor-independent cache manifest."""
     out_dir.mkdir(parents=True, exist_ok=True)
+    # No wall-clock timestamp: these are committed review snapshots, and git
+    # already dates them. The parquet sha256 in the manifest identifies the data.
     findings_path = out_dir / f"findings.{findings_label}.json"
     findings_path.write_text(
         json.dumps(
             {
-                "generated": _dt.datetime.now().isoformat(timespec="seconds"),
                 "method": method,
                 "max_year": MAX_YEAR,
                 "analysis_window": list(ANALYSIS_WINDOW),
@@ -320,13 +309,7 @@ def write_side_outputs(
     )
     manifest_path = out_dir / "cache_manifest.json"
     manifest_path.write_text(
-        json.dumps(
-            {
-                "generated": _dt.datetime.now().isoformat(timespec="seconds"),
-                "series": _cache_manifest(),
-            },
-            indent=2,
-        ),
+        json.dumps({"series": _cache_manifest()}, indent=2),
         encoding="utf-8",
     )
     return [findings_path, manifest_path]
@@ -369,13 +352,10 @@ def build_report(
         "<div style='max-width:1100px;margin:20px auto;font:13px/1.5 system-ui;"
         "color:#444;border-top:1px solid #ddd;padding-top:12px'>"
         + (f"<b>Data caveats</b><ul>{items}</ul>" if seed_notes else "")
-        + f"<p style='color:#888'>Generated {_dt.date.today().isoformat()} by toy-money; "
-        + f"observations after {MAX_YEAR} (the last completed calendar year) are excluded. "
-        + f"Overlap is counted in the shared analysis window "
+        + f"<p style='color:#888'>{_dt.date.today().isoformat()} · toy-money · "
+        + f"data through {MAX_YEAR}; overlap window "
         + f"t={ANALYSIS_WINDOW[0]}..{ANALYSIS_WINDOW[1]}. "
-        + "The anchor choice drives the comparison — rebuild with "
-        + "<code>--anchor workingage_peak</code> or explicit "
-        + "<code>--anchor-jpn/--anchor-chn</code> to test alternatives. "
+        + f"Rebuild <code>--anchor workingage_peak</code> for the other alignment. "
         + source_line
         + "</p></div>"
     )

@@ -1,32 +1,19 @@
-"""Turn the aligned panels into stated conclusions.
+"""Aligned panels -> stated conclusions.
 
-The reference point is *China's latest observation* (`reference_t`): every finding
+Reference point = China's latest observation (`reference_t`): every `Finding`
 answers "given where China is now, what does the Japan precedent say?"
 
-Design for reuse: an analyzer is any callable
-`(panels, alignment) -> list[Finding]`. `precedent` is the first concrete one.
-A second method (a Δ-from-anchor comparison against many episodes, a regime
-classifier, ...) returns the same `Finding` shape with its own `method` string,
-and the report renders it unchanged.
+An analyzer is any `(panels, alignment) -> list[Finding]`; `precedent` is the
+first. The report renders whatever `Finding`s it gets.
 
-Deliberate non-features:
-- No aggregate similarity score. Indicators have different units, different
-  overlap lengths, and mixed provenance; averaging them produces a number that
-  looks authoritative and means nothing.
-- No probability. n=1 precedent (Japan only).
-- **No automatic "tracks vs. diverges" verdict.** That binary needs a defensible
-  similarity band, and any level-relative band is scale-biased: an indicator on a
-  ~67 base (working-age %) and one on a ~3 base (GDP growth %) with the *same*
-  shape agreement get opposite verdicts purely from the denominator. So a finding
-  carries the numbers — where China sits relative to Japan at matched t, and
-  Japan's subsequent path — and the reader judges similarity.
-- **No scoreboard in the headline.** Counting above/below directions is
-  arithmetic, but a reader takes a tally as a verdict. The headline names what was
-  compared and leaves the per-indicator directions to the table below it.
-- Overlap is counted only inside `ANALYSIS_WINDOW`, so the comparison does not
-  silently span China's pre-reform years and Japan's 1960s. The hypothesis is
-  about the *post-anchor* path, so the verdict gate is on post-anchor overlap
-  (`n_post`), not the total.
+Non-features (see CLAUDE.md Working rules):
+- No similarity score, no probability (n=1 precedent).
+- No tracks/diverges verdict — any level-relative similarity band is scale-biased
+  (working-age % on a ~67 base vs GDP growth % on a ~3 base). The finding carries
+  the numbers; the reader judges.
+- No headline scoreboard — a reader reads a tally as a verdict.
+- Overlap counted only inside `ANALYSIS_WINDOW`, split pre/post anchor; the verdict
+  gate is on `n_post` (the hypothesis is about the post-anchor path).
 """
 
 from __future__ import annotations
@@ -224,13 +211,11 @@ def headline(findings: list[Finding]) -> str:
     compared = sum(f.verdict == "compared" for f in findings)
     indet = n - compared
     if indet:
-        scope = (
-            f"{n} indicators, {compared} with a stated China-vs-Japan position "
-            f"at China's reference point, {indet} indeterminate"
+        return (
+            f"{n} indicators; {compared} have a China-vs-Japan direction at "
+            f"China's reference point, {indet} indeterminate. Table and chart below"
         )
-    else:
-        scope = f"{n} indicators, all with a stated China-vs-Japan position at China's reference point"
     return (
-        f"{scope}. Per-indicator direction and Japan's forward path below; the "
-        f"anchor matrix shows how positions shift by alignment"
+        f"{n} indicators, each with a China-vs-Japan direction at China's "
+        f"reference point. Table and chart below"
     )

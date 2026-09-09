@@ -17,7 +17,7 @@ def test_build_report_uses_bundled_fallback_snapshot(tmp_path, monkeypatch):
     text = path.read_text(encoding="utf-8")
     assert "Conclusion" in text
     assert "bundled fallback snapshot" in text
-    assert f"observations after {MAX_YEAR}" in text
+    assert f"data through {MAX_YEAR}" in text
     # headline names the scope, no direction tally
     assert "indicators" in text
     assert "above Japan on" not in text
