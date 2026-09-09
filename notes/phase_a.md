@@ -4,18 +4,28 @@ Live cache: `refresh-data` run **34331709154** (branch `fix/live-validation`,
 2026-09-09). Committed outputs: `artifacts/findings.bubble_peak.json`,
 `artifacts/findings.workingage_peak.json`, `artifacts/cache_manifest.json`.
 
-## Live vs. seed
+## Live vs. seed — what it does and does not show
 
 `tests/test_live_vs_seed.py` ran in the Action after the fetch and **passed for all
-9 provider-backed series** — no live value disagreed with the hand-checked seed
-snapshot beyond tolerance (1.5 pp absolute for growth-rate/share series, 10 %
-relative otherwise, one outlier allowed). `grad_labor` is seed-only and not
-checked.
+9 provider-backed series** — no live value disagreed with the seed snapshot beyond
+tolerance (1.5 pp absolute for growth-rate/share series, 10 % relative otherwise,
+one outlier allowed). `grad_labor` is seed-only and not checked.
 
-So the World Bank / IMF / BIS keys currently in `config.py` select series whose
-values match what was hand-verified for the seed. This does **not** by itself prove
-the BIS *flow/dimension choice* is the intended economic concept — that still needs
-the human check below.
+**Caveat on how much this proves.** `seed/README.md`: the provider-backed seed rows
+are "a snapshot of the 2026-09-08 `refresh-data` workflow artifact" — i.e. produced
+by *this same fetch code with these same keys*. So the test compares a fetch against
+a snapshot of an earlier fetch through the identical path. It reliably catches:
+provider data **revisions**, a key that **starts** returning different values, and
+drift since the snapshot. It does **not** independently verify the keys were right
+to begin with — a key that selected the wrong series on day one would sit in both
+seed and live and the test would pass.
+
+The wrong-key defences that remain:
+- `sources/bis.py` `_validate_dimensions` — rejects a response whose echoed
+  dimension columns don't match the requested key (catches the API ignoring or
+  substituting a dimension).
+- `toy-money verify` — prints URLs + rows for a human to check against
+  stats.bis.org (below). **This is the only check on the dimension *choice*.**
 
 ## BIS rows to check against stats.bis.org (`toy-money verify`)
 

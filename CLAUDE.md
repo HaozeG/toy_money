@@ -125,11 +125,15 @@ Pipeline: `sources/*` fetch → `datastore` caches as parquet → `align` transf
   `artifacts/cache_manifest.json` (anchor-independent: provenance, rows, year range,
   parquet sha256) — the reviewable outputs; the HTML (`include_plotlyjs="cdn"`) stays
   gitignored.
-- **BIS trust chain**: `sources/bis.py` validates the dimension *values* the SDMX CSV
-  echoes back; `tests/test_live_vs_seed.py` (run in `refresh-data.yml`) catches a key
-  that parsed but returned the wrong series; `toy-money verify` prints the URLs + rows
-  for a human to check. The flow/dimension *choice* still needs that human check when a
-  new BIS series is added.
+- **BIS trust chain**: `sources/bis.py` `_validate_dimensions` rejects a response
+  whose echoed dimension columns don't match the requested key.
+  `tests/test_live_vs_seed.py` (run in `refresh-data.yml`) catches **divergence from
+  the seed snapshot** — a provider revision or a key that *starts* returning different
+  values — but not original wrong-key selection, since the provider-backed seed rows
+  are themselves a snapshot of an earlier fetch through the same code
+  (`seed/README.md`). `toy-money verify` prints URLs + rows for a human to check the
+  dimension *choice* against stats.bis.org — **the only check on the choice itself**,
+  and it needs re-running when a new BIS series is added.
 
 ## Things that will bite you
 
