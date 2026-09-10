@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from ..config import COUNTRIES, Series
+from ..config import FETCH_COUNTRIES, Series
 from ._http import get_json
 
 BASE = "https://api.worldbank.org/v2"
@@ -16,7 +16,7 @@ BASE = "https://api.worldbank.org/v2"
 
 def fetch(series: Series) -> pd.DataFrame:
     code = series.params["indicator"]
-    countries = ";".join(COUNTRIES)
+    countries = ";".join(FETCH_COUNTRIES)
     url = f"{BASE}/country/{countries}/indicator/{code}"
     payload = get_json(url, params={"format": "json", "per_page": 20000})
     if not isinstance(payload, list) or len(payload) < 2 or payload[1] is None:

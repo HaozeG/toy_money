@@ -19,7 +19,9 @@ import io
 
 import pandas as pd
 
-from ..config import COUNTRIES, Series
+import sys
+
+from ..config import FETCH_COUNTRIES, Series
 from ._http import get_text
 
 BASE = "https://stats.bis.org/api/v1/data"
@@ -30,7 +32,14 @@ _TC_KEY = "Q.{cty}.{borrowers}.A.M.770"
 # Selected property prices (WS_SPP): FREQ.REF_AREA.VALUE.UNIT_MEASURE
 _SPP_KEY = "Q.{cty}.R.628"
 
-_ISO2 = {"CHN": "CN", "JPN": "JP"}
+# BIS uses ISO-3166 alpha-2. Taiwan is not a BIS reporting economy for WS_TC /
+# WS_SPP; it is listed so `request_urls` is complete, and the fetch records it as
+# a coverage gap rather than raising.
+_ISO2 = {
+    "CHN": "CN", "JPN": "JP", "FIN": "FI", "SWE": "SE", "KOR": "KR",
+    "THA": "TH", "USA": "US", "GBR": "GB", "ESP": "ES", "IRL": "IE",
+    "TWN": "TW", "DEU": "DE", "ITA": "IT",
+}
 
 
 def _expected_dimensions(dataset: str, cty: str, borrowers: str) -> dict[str, str]:
@@ -84,7 +93,7 @@ def request_urls(series: Series) -> list[tuple[str, str]]:
     dataset = series.params.get("dataset", "WS_TC")
     borrowers = series.params.get("borrowers", "P")
     urls = []
-    for iso3 in COUNTRIES:
+    for iso3 in FETCH_COUNTRIES:
         key = _key_for(dataset, iso3, borrowers)
         urls.append((iso3, f"{BASE}/{dataset}/{key}/all?format=csv"))
     return urls
@@ -118,14 +127,37 @@ def fetch(series: Series) -> pd.DataFrame:
     dataset = series.params.get("dataset", "WS_TC")
     borrowers = series.params.get("borrowers", "P")
     frames = []
-    for iso3 in COUNTRIES:
+    missing: list[str] = []
+    for iso3 in FETCH_COUNTRIES:
         cty = _ISO2[iso3]
         key = _key_for(dataset, iso3, borrowers)
         expected = _expected_dimensions(dataset, cty, borrowers)
-        df = _fetch_one(dataset, key, expected)
+        try:
+            df = _fetch_one(dataset, key, expected)
+        except Exception as exc:  # noqa: BLE001
+            # A wrong dimension *value* (the key resolved to the wrong series) is
+            # a real bug — re-raise. An economy simply absent from the flow
+            # (e.g. TWN, or an EME not in WS_SPP — HTTP 404 / empty CSV) is a
+            # coverage gap: record it, keep the other countries, let the analyzer
+            # mark the indicator unavailable for that episode.
+            if any(
+                m in str(exc)
+                for m in (
+                    "did not resolve to the intended series",
+                    "missing expected dimension columns",
+                )
+            ):
+                raise
+            missing.append(f"{iso3}: {exc}")
+            continue
         df["country"] = iso3
         frames.append(df[["country", "year", "value"]])
-    combined = pd.concat(frames, ignore_index=True)
-    if combined.empty:
+    if missing:
+        print(
+            f"  note  BIS {dataset} {series.key}: no data for "
+            + ", ".join(missing),
+            file=sys.stderr,
+        )
+    if not frames:
         raise RuntimeError(f"BIS returned no rows for {dataset} {series.key}")
-    return combined
+    return pd.concat(frames, ignore_index=True)

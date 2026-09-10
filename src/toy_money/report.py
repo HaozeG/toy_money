@@ -288,9 +288,15 @@ def _cache_manifest() -> dict:
                 rows=int(len(df)),
                 year_min=int(df["year"].min()),
                 year_max=int(df["year"].max()),
+                # Per-country span: an episode whose country is absent here is
+                # marked unavailable for that indicator, not silently dropped.
+                by_country={
+                    str(c): [int(g["year"].min()), int(g["year"].max()), int(len(g))]
+                    for c, g in df.groupby("country")
+                },
             )
         except FileNotFoundError:
-            entry.update(rows=0, year_min=None, year_max=None)
+            entry.update(rows=0, year_min=None, year_max=None, by_country={})
         pq = datastore.DATA_DIR / f"{s.key}.parquet"
         entry["sha256"] = (
             hashlib.sha256(pq.read_bytes()).hexdigest() if pq.exists() else None

@@ -34,6 +34,29 @@ SEED_DIR = Path(__file__).resolve().parent / "seed"
 
 COUNTRIES = {"CHN": "China", "JPN": "Japan"}
 
+# The bilateral pair above is Phase 1's report and the alignment-completeness set
+# (`resolve_alignment` requires an anchor year for every country in `COUNTRIES`).
+# Phase B compares China against a *distribution* of episodes, so the fetch layer
+# pulls a wider set — `FETCH_COUNTRIES` — while the bilateral report still runs on
+# `COUNTRIES` only. A country with no provider coverage (e.g. TWN in World Bank /
+# IMF / BIS) simply comes back empty; that is recorded in the cache manifest and
+# `toy-money coverage`, not silently dropped.
+FETCH_COUNTRIES = {
+    "CHN": "China",
+    "JPN": "Japan",
+    "FIN": "Finland",
+    "SWE": "Sweden",
+    "KOR": "South Korea",
+    "THA": "Thailand",
+    "USA": "United States",
+    "GBR": "United Kingdom",
+    "ESP": "Spain",
+    "IRL": "Ireland",
+    "TWN": "Taiwan",
+    "DEU": "Germany",
+    "ITA": "Italy",
+}
+
 
 # --- indicator table ------------------------------------------------------
 
@@ -146,6 +169,45 @@ SERIES: list[Series] = [
             "peak."
         ),
     ),
+    # --- mechanism row (hypotheses.md, approved 2026-09-10): production /
+    # consumption split. WB keyless, no adapter change. Not in the bilateral grid
+    # yet — the mechanism analysis lands with Phase B4.
+    Series(
+        key="capital_formation_gdp",
+        label="Gross capital formation",
+        unit="% of GDP",
+        source="worldbank",
+        params={"indicator": "NE.GDI.TOTL.ZS"},
+        band=2.0,
+        in_report=False,
+    ),
+    Series(
+        key="hh_consumption_gdp",
+        label="Household final consumption",
+        unit="% of GDP",
+        source="worldbank",
+        params={"indicator": "NE.CON.PRVT.ZS"},
+        band=2.0,
+        in_report=False,
+    ),
+    Series(
+        key="industry_va_gdp",
+        label="Industry (incl. construction) value added",
+        unit="% of GDP",
+        source="worldbank",
+        params={"indicator": "NV.IND.TOTL.ZS"},
+        band=2.0,
+        in_report=False,
+    ),
+    Series(
+        key="services_va_gdp",
+        label="Services value added",
+        unit="% of GDP",
+        source="worldbank",
+        params={"indicator": "NV.SRV.TOTL.ZS"},
+        band=2.0,
+        in_report=False,
+    ),
     Series(
         key="youth_unemployment",
         label="Youth unemployment (15–24, ILO modelled)",
@@ -205,3 +267,54 @@ ANCHOR_PRESETS: dict[str, AnchorPreset] = {
 }
 
 DEFAULT_ANCHOR = "bubble_peak"
+
+
+# --- comparator episodes (Phase B) -------------------------------------------
+
+@dataclass(frozen=True)
+class Episode:
+    """One comparator episode. `search_window` names *which* episode (the years it
+    unfolded); the anchor year itself is still computed from data by `anchor_rule`
+    inside that window — see `align.anchor_year`. Naming the window is not
+    hardcoding the anchor: house prices in SWE / USA later exceeded their crisis
+    peaks, so a global argmax would select ~2021, not the episode we mean.
+    """
+
+    iso3: str
+    anchor_rule: str  # "property_peak" | "workingage_peak"
+    search_window: tuple[int, int]  # inclusive years the episode unfolded
+    label: str
+    set_name: str  # "post_bubble" | "workingage_peak"
+
+
+EPISODES: list[Episode] = [
+    # Post-property-bubble set (hypotheses #2, #3, #4). Windows are orientation
+    # bounds; `property_peak` picks the real-house-price peak year within each.
+    Episode("JPN", "property_peak", (1988, 1994), "Japan 1990s", "post_bubble"),
+    Episode("FIN", "property_peak", (1987, 1993), "Finland / Nordic crisis", "post_bubble"),
+    Episode("SWE", "property_peak", (1987, 1993), "Sweden / Nordic crisis", "post_bubble"),
+    Episode("KOR", "property_peak", (1994, 2001), "Korea / Asian crisis", "post_bubble"),
+    Episode("THA", "property_peak", (1994, 2000), "Thailand / Asian crisis", "post_bubble"),
+    Episode("USA", "property_peak", (2004, 2009), "US 2008", "post_bubble"),
+    Episode("GBR", "property_peak", (2004, 2009), "UK 2008", "post_bubble"),
+    Episode("ESP", "property_peak", (2004, 2009), "Spain 2008", "post_bubble"),
+    Episode("IRL", "property_peak", (2004, 2009), "Ireland 2008", "post_bubble"),
+    Episode("CHN", "property_peak", (2019, 2024), "China now", "post_bubble"),
+    # Working-age-share-peak set (hypothesis #1). Windows bound the demographic
+    # peak; `workingage_peak` picks the argmax within each.
+    Episode("JPN", "workingage_peak", (1988, 1996), "Japan", "workingage_peak"),
+    Episode("KOR", "workingage_peak", (2010, 2020), "Korea", "workingage_peak"),
+    Episode("TWN", "workingage_peak", (2010, 2018), "Taiwan", "workingage_peak"),
+    Episode("DEU", "workingage_peak", (1982, 1992), "Germany", "workingage_peak"),
+    Episode("ITA", "workingage_peak", (1988, 1996), "Italy", "workingage_peak"),
+    Episode("CHN", "workingage_peak", (2005, 2015), "China", "workingage_peak"),
+]
+
+# Per-hypothesis comparison horizon (years post-anchor), set at the B1 checkpoint.
+EPISODE_HORIZONS = {
+    "demographic": 20,
+    "balance_sheet": 20,
+    "deflation": 20,
+    "scarring": 10,
+    "mechanism": 15,
+}
