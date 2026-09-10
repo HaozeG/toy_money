@@ -24,7 +24,7 @@ def test_build_report_uses_bundled_fallback_snapshot(tmp_path, monkeypatch):
 
     findings = json.loads((tmp_path / "findings.bubble_peak.json").read_text())
     assert findings["method"] == "precedent"
-    assert findings["alignment"]["anchors"] == {"JPN": 1990, "CHN": 2021}
+    assert findings["alignment"]["anchors"] == {"JPN": 1991, "CHN": 2021}
     assert findings["findings"]
     manifest = json.loads((tmp_path / "cache_manifest.json").read_text())
     assert set(manifest["series"]) >= {"gdp_growth", "gov_debt_gdp"}

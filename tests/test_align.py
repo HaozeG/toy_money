@@ -1,19 +1,28 @@
 import pandas as pd
 import pytest
 
-from toy_money.align import align_series, resolve_alignment
+from toy_money.align import align_series, anchor_year, resolve_alignment
 from toy_money.config import MAX_YEAR
 
 
-def test_preset_resolves():
+def test_preset_computes_anchors_from_data():
+    # property_peak over the seed cache: Japan's real house prices peak 1991,
+    # China's 2021. No year is typed into the preset.
     a = resolve_alignment("bubble_peak")
-    assert a.anchors == {"JPN": 1990, "CHN": 2021}
+    assert a.anchors == {"JPN": 1991, "CHN": 2021}
+    assert a.rule == "property_peak"
 
 
-def test_override_beats_preset():
+def test_override_beats_computed_anchor():
     a = resolve_alignment("bubble_peak", {"CHN": 2020})
     assert a.anchors["CHN"] == 2020
-    assert a.anchors["JPN"] == 1990
+    assert a.anchors["JPN"] == 1991
+    assert a.rule == "explicit"
+
+
+def test_anchor_year_reports_a_reason_when_it_cannot_resolve():
+    r = anchor_year("ZZZ", "property_peak", (1980, 1990))
+    assert r.year is None and "no 'real_property_prices' data" in r.reason
 
 
 def test_custom_without_all_countries_raises():
@@ -54,7 +63,7 @@ def test_align_shifts_to_years_since_anchor():
     df = pd.DataFrame(
         {
             "country": ["JPN", "JPN", "CHN", "CHN"],
-            "year": [1989, 1990, 2021, 2022],
+            "year": [1990, 1991, 2021, 2022],
             "value": [1.0, 2.0, 3.0, 4.0],
         }
     )

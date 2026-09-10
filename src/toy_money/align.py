@@ -10,42 +10,114 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from .config import ANCHOR_PRESETS, COUNTRIES, MAX_YEAR
+from . import datastore
+from .config import ANCHOR_PRESETS, COUNTRIES, MAX_YEAR, episode_window
 
 
 @dataclass(frozen=True)
 class Alignment:
     anchors: dict  # ISO3 -> anchor year
     label: str
+    rule: str = "explicit"  # anchor rule that produced the years
 
     def describe(self) -> str:
         parts = [f"{COUNTRIES.get(k, k)} {v}" for k, v in self.anchors.items()]
         return f"{self.label} ({', '.join(parts)})"
 
 
+# --- anchor rules: the anchor year is computed from data, never typed ---------
+
+# Series each rule reads to find the peak.
+_RULE_SERIES = {
+    "property_peak": "real_property_prices",
+    "workingage_peak": "workingage_share",
+}
+_MIN_DECLINE_YEARS = 3  # property_peak: years of decline that confirm a real peak
+
+
+@dataclass(frozen=True)
+class AnchorResult:
+    iso3: str
+    rule: str
+    year: int | None
+    reason: str = ""  # why year is None (no data / no peak / not confirmed)
+
+
+def anchor_year(iso3: str, rule: str, window: tuple[int, int]) -> AnchorResult:
+    """Year `rule` selects for `iso3` inside `window` (inclusive), from the cache.
+
+    `property_peak`: argmax of the real house-price index in the window, requiring
+    at least `_MIN_DECLINE_YEARS` subsequent years all below the peak (so a rising
+    market isn't mistaken for a bust). `workingage_peak`: argmax of the working-age
+    share in the window. Returns `year=None` with a `reason` when the data can't
+    support a call — the caller records the gap, it does not raise.
+    """
+    if rule not in _RULE_SERIES:
+        raise KeyError(f"unknown anchor rule '{rule}'")
+    key = _RULE_SERIES[rule]
+    try:
+        df = datastore.read(key)
+    except FileNotFoundError:
+        return AnchorResult(iso3, rule, None, f"no '{key}' cache")
+    g = df[df["country"] == iso3].sort_values("year")
+    if g.empty:
+        return AnchorResult(iso3, rule, None, f"no '{key}' data for {iso3}")
+    lo, hi = window
+    w = g[g["year"].between(lo, hi)]
+    if w.empty:
+        return AnchorResult(iso3, rule, None, f"no '{key}' observation in {lo}-{hi}")
+    peak = w.loc[w["value"].idxmax()]
+    year = int(peak["year"])
+    if rule == "property_peak":
+        after = g[g["year"] > year].sort_values("year").head(_MIN_DECLINE_YEARS)
+        if len(after) < _MIN_DECLINE_YEARS or bool(
+            (after["value"] >= peak["value"]).any()
+        ):
+            return AnchorResult(
+                iso3,
+                rule,
+                None,
+                f"peak {year} not followed by {_MIN_DECLINE_YEARS} declining years",
+            )
+    return AnchorResult(iso3, rule, year)
+
+
 def resolve_alignment(
     preset: str | None = None,
     anchor_overrides: dict | None = None,
 ) -> Alignment:
-    """Build an Alignment from a named preset and/or explicit per-country years."""
+    """Build an Alignment. A named preset computes each country's anchor year with
+    its rule (`property_peak` / `workingage_peak`) against that country's episode
+    search window — no year is typed in. Explicit `anchor_overrides` win over the
+    computed year (and are the only input when no preset is given).
+    """
+    anchors: dict[str, int] = {}
+    rule = "explicit"
     if preset:
         if preset not in ANCHOR_PRESETS:
             raise KeyError(
-                f"unknown anchor preset '{preset}'. "
-                f"choices: {sorted(ANCHOR_PRESETS)}"
+                f"unknown anchor preset '{preset}'. choices: {sorted(ANCHOR_PRESETS)}"
             )
         p = ANCHOR_PRESETS[preset]
-        anchors = dict(p.anchors)
+        rule = p.rule
         label = p.description
+        for iso3 in COUNTRIES:
+            res = anchor_year(iso3, p.rule, episode_window(iso3, p.set_name))
+            if res.year is None:
+                raise ValueError(
+                    f"preset '{preset}': cannot anchor {iso3} — {res.reason}"
+                )
+            anchors[iso3] = res.year
     else:
-        anchors = {}
         label = "custom anchors"
     if anchor_overrides:
         anchors.update({k.upper(): int(v) for k, v in anchor_overrides.items()})
+        if preset:
+            rule = "explicit"
     missing = set(COUNTRIES) - set(anchors)
     if missing:
         raise ValueError(f"no anchor year for: {sorted(missing)}")
-    return Alignment(anchors=anchors, label=label)
+    return Alignment(anchors=anchors, label=label, rule=rule)
 
 
 def align_series(

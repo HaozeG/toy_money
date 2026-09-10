@@ -47,7 +47,6 @@ FETCH_COUNTRIES = {
     "FIN": "Finland",
     "SWE": "Sweden",
     "KOR": "South Korea",
-    "THA": "Thailand",
     "USA": "United States",
     "GBR": "United Kingdom",
     "ESP": "Spain",
@@ -244,31 +243,6 @@ SERIES: list[Series] = [
 SERIES_BY_KEY = {s.key: s for s in SERIES}
 
 
-# --- anchor presets ------------------------------------------------------
-
-@dataclass(frozen=True)
-class AnchorPreset:
-    name: str
-    description: str
-    anchors: dict  # ISO3 -> year
-
-
-ANCHOR_PRESETS: dict[str, AnchorPreset] = {
-    "bubble_peak": AnchorPreset(
-        name="bubble_peak",
-        description="asset-bubble peak",
-        anchors={"JPN": 1990, "CHN": 2021},
-    ),
-    "workingage_peak": AnchorPreset(
-        name="workingage_peak",
-        description="working-age population share peak",
-        anchors={"JPN": 1992, "CHN": 2010},
-    ),
-}
-
-DEFAULT_ANCHOR = "bubble_peak"
-
-
 # --- comparator episodes (Phase B) -------------------------------------------
 
 @dataclass(frozen=True)
@@ -293,8 +267,9 @@ EPISODES: list[Episode] = [
     Episode("JPN", "property_peak", (1988, 1994), "Japan 1990s", "post_bubble"),
     Episode("FIN", "property_peak", (1987, 1993), "Finland / Nordic crisis", "post_bubble"),
     Episode("SWE", "property_peak", (1987, 1993), "Sweden / Nordic crisis", "post_bubble"),
-    Episode("KOR", "property_peak", (1994, 2001), "Korea / Asian crisis", "post_bubble"),
-    Episode("THA", "property_peak", (1994, 2000), "Thailand / Asian crisis", "post_bubble"),
+    # KOR and THA (Asian crisis) are dropped from post_bubble: property_peak lands
+    # on a window edge because 1997 was a currency/credit event, not a house-price
+    # peak. See notes/coverage.md. KOR stays in the working-age set (anchors 2016).
     Episode("USA", "property_peak", (2004, 2009), "US 2008", "post_bubble"),
     Episode("GBR", "property_peak", (2004, 2009), "UK 2008", "post_bubble"),
     Episode("ESP", "property_peak", (2004, 2009), "Spain 2008", "post_bubble"),
@@ -318,3 +293,43 @@ EPISODE_HORIZONS = {
     "scarring": 10,
     "mechanism": 15,
 }
+
+POST_BUBBLE_SET = "post_bubble"
+WORKINGAGE_SET = "workingage_peak"
+
+
+def episode_window(iso3: str, set_name: str) -> tuple[int, int]:
+    """The search window an anchor rule uses for one country in one episode set."""
+    for e in EPISODES:
+        if e.iso3 == iso3 and e.set_name == set_name:
+            return e.search_window
+    raise KeyError(f"no episode for {iso3} in set '{set_name}'")
+
+
+# --- anchor presets ------------------------------------------------------
+
+# A preset is the bilateral (China/Japan) alignment. It carries no years: the
+# anchor rule computes them from data against each country's episode window, so
+# `bubble_peak` and the `post_bubble` episode set always agree.
+
+@dataclass(frozen=True)
+class AnchorPreset:
+    name: str
+    description: str
+    rule: str  # "property_peak" | "workingage_peak"
+    set_name: str  # EPISODES rows that supply the per-country search windows
+
+
+ANCHOR_PRESETS: dict[str, AnchorPreset] = {
+    "bubble_peak": AnchorPreset(
+        "bubble_peak", "asset-bubble peak", "property_peak", POST_BUBBLE_SET
+    ),
+    "workingage_peak": AnchorPreset(
+        "workingage_peak",
+        "working-age population share peak",
+        "workingage_peak",
+        WORKINGAGE_SET,
+    ),
+}
+
+DEFAULT_ANCHOR = "bubble_peak"

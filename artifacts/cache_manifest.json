@@ -3,7 +3,7 @@
     "gdp_growth": {
       "source": "worldbank",
       "provenance": "live",
-      "rows": 780,
+      "rows": 715,
       "year_min": 1961,
       "year_max": 2025,
       "by_country": {
@@ -57,23 +57,18 @@
           2025,
           65
         ],
-        "THA": [
-          1961,
-          2025,
-          65
-        ],
         "USA": [
           1961,
           2025,
           65
         ]
       },
-      "sha256": "c582804ea575f3faa6f963b6c7be1208bad7d6b663543eb14769ed8f7f838e0e"
+      "sha256": "4f84a645866a18420b69138704193f2bbde4cb3dff21faeb62b91bd70fd23058"
     },
     "workingage_share": {
       "source": "worldbank",
       "provenance": "live",
-      "rows": 792,
+      "rows": 726,
       "year_min": 1960,
       "year_max": 2025,
       "by_country": {
@@ -127,23 +122,18 @@
           2025,
           66
         ],
-        "THA": [
-          1960,
-          2025,
-          66
-        ],
         "USA": [
           1960,
           2025,
           66
         ]
       },
-      "sha256": "4df8abca713e0f229f3af09a16ccd6745b17379d442a3d535b7b592a6e67e964"
+      "sha256": "6fb60a37d8cfd96b59c594d492539b511fddbab97b13cefb7003266c5ca3c3cc"
     },
     "gdp_pc_ppp": {
       "source": "worldbank",
       "provenance": "live",
-      "rows": 432,
+      "rows": 396,
       "year_min": 1990,
       "year_max": 2025,
       "by_country": {
@@ -197,23 +187,18 @@
           2025,
           36
         ],
-        "THA": [
-          1990,
-          2025,
-          36
-        ],
         "USA": [
           1990,
           2025,
           36
         ]
       },
-      "sha256": "b5130c66bd779002411229416bbceed0e844e5fcf1a40dd9e600e6eb92e9e58f"
+      "sha256": "185a712ecde0e8df8912e362a9c2ea0a3ba7b6ca6e25db6d82016cdbc1094f57"
     },
     "cpi_inflation": {
       "source": "worldbank",
       "provenance": "live",
-      "rows": 763,
+      "rows": 698,
       "year_min": 1960,
       "year_max": 2025,
       "by_country": {
@@ -267,23 +252,18 @@
           2025,
           66
         ],
-        "THA": [
-          1960,
-          2025,
-          65
-        ],
         "USA": [
           1960,
           2024,
           65
         ]
       },
-      "sha256": "42c1b91da948808bd748031ada9e6e01af893f37f38749b9155e7162fbe0b8d8"
+      "sha256": "68c4d15905a1c5f04c6415f72cd90460252c096534085e882505c5d62d072fda"
     },
     "gov_debt_gdp": {
       "source": "imf",
       "provenance": "live",
-      "rows": 550,
+      "rows": 514,
       "year_min": 1980,
       "year_max": 2031,
       "by_country": {
@@ -337,11 +317,6 @@
           2031,
           39
         ],
-        "THA": [
-          1996,
-          2031,
-          36
-        ],
         "TWN": [
           1997,
           2031,
@@ -353,12 +328,12 @@
           31
         ]
       },
-      "sha256": "db19f22f297d7839f1c223aae69f3359065c21edf13e73a1f62fd1cdfde76b1f"
+      "sha256": "fd75b8cbeaa2794960e624c3bf949dbc0f6b81b80df864e338dafec5f9934724"
     },
     "credit_hh_gdp": {
       "source": "bis",
       "provenance": "live",
-      "rows": 614,
+      "rows": 579,
       "year_min": 1947,
       "year_max": 2025,
       "by_country": {
@@ -412,23 +387,18 @@
           2025,
           46
         ],
-        "THA": [
-          1991,
-          2025,
-          35
-        ],
         "USA": [
           1947,
           2025,
           79
         ]
       },
-      "sha256": "fb552233ef7fc394d73685b5e8f587a62a684c346e6ab40ce9e2042422449751"
+      "sha256": "0cf962207b27fc5d9898fd53b1455f52e848900d1fdf40f4046ae1166a61d9cf"
     },
     "credit_nfc_gdp": {
       "source": "bis",
       "provenance": "live",
-      "rows": 604,
+      "rows": 569,
       "year_min": 1947,
       "year_max": 2025,
       "by_country": {
@@ -482,23 +452,18 @@
           2025,
           46
         ],
-        "THA": [
-          1991,
-          2025,
-          35
-        ],
         "USA": [
           1947,
           2025,
           79
         ]
       },
-      "sha256": "1398cbe59c063dead859596c14140ca1bdac424b942e3bbfa403a0ef2d8a3813"
+      "sha256": "9a2448c159444bf36c966ee0bb3ec07c3957bba82269e2252c51c9f90408bb66"
     },
     "real_property_prices": {
       "source": "bis",
       "provenance": "live",
-      "rows": 661,
+      "rows": 625,
       "year_min": 1947,
       "year_max": 2026,
       "by_country": {
@@ -552,23 +517,18 @@
           2026,
           57
         ],
-        "THA": [
-          1991,
-          2026,
-          36
-        ],
         "USA": [
           1970,
           2026,
           57
         ]
       },
-      "sha256": "3aa8c716f35848395a1e6a2e32403a50eb4e93439930d119b8ae847b6c2267d0"
+      "sha256": "52cb4b2f96b6ebd4adb0daf39174a4f8c0ed43c6f2f5a94a78230095e83cdf5a"
     },
     "capital_formation_gdp": {
       "source": "worldbank",
       "provenance": "live",
-      "rows": 709,
+      "rows": 643,
       "year_min": 1960,
       "year_max": 2025,
       "by_country": {
@@ -622,23 +582,18 @@
           2025,
           66
         ],
-        "THA": [
-          1960,
-          2025,
-          66
-        ],
         "USA": [
           1970,
           2024,
           55
         ]
       },
-      "sha256": "14b7f6f5726b047d8c0203f2a8508e71967df73618fbdc381634147e153884b0"
+      "sha256": "0d3dc59726c3d0ad0db99c5fd59014fb669116a4755a718984bd53f6e4764a93"
     },
     "hh_consumption_gdp": {
       "source": "worldbank",
       "provenance": "live",
-      "rows": 719,
+      "rows": 653,
       "year_min": 1960,
       "year_max": 2025,
       "by_country": {
@@ -692,23 +647,18 @@
           2025,
           66
         ],
-        "THA": [
-          1960,
-          2025,
-          66
-        ],
         "USA": [
           1970,
           2024,
           55
         ]
       },
-      "sha256": "2150f1c8a96e43984506f644c3ccc286ac54a47fd4803f8b0b77973abfe75794"
+      "sha256": "ea5a543358c9b9e928471d44d8293098868a50928ead30749cd92d433fafcd50"
     },
     "industry_va_gdp": {
       "source": "worldbank",
       "provenance": "live",
-      "rows": 520,
+      "rows": 454,
       "year_min": 1960,
       "year_max": 2025,
       "by_country": {
@@ -762,23 +712,18 @@
           2025,
           46
         ],
-        "THA": [
-          1960,
-          2025,
-          66
-        ],
         "USA": [
           1997,
           2021,
           25
         ]
       },
-      "sha256": "40d775de2fd2d576e6cb51b93a99ceefb116a8c3ed81e010b59e910ed8b09a2b"
+      "sha256": "bd17d709ee7d07ac481213fbeef5ae5d7b3f0501f71dde62de47c8c60f443e75"
     },
     "services_va_gdp": {
       "source": "worldbank",
       "provenance": "live",
-      "rows": 487,
+      "rows": 454,
       "year_min": 1960,
       "year_max": 2025,
       "by_country": {
@@ -832,23 +777,18 @@
           2025,
           46
         ],
-        "THA": [
-          1993,
-          2025,
-          33
-        ],
         "USA": [
           1997,
           2021,
           25
         ]
       },
-      "sha256": "050bb2bbab50f6603f53a30ff74e08ca65d4e780478dbb3b549f2706d4e13f63"
+      "sha256": "68c14451930b6e2f53bccafac527b4c88cfb131a00129f4b0042b41e6a25db69"
     },
     "youth_unemployment": {
       "source": "worldbank",
       "provenance": "live",
-      "rows": 420,
+      "rows": 385,
       "year_min": 1991,
       "year_max": 2025,
       "by_country": {
@@ -902,18 +842,13 @@
           2025,
           35
         ],
-        "THA": [
-          1991,
-          2025,
-          35
-        ],
         "USA": [
           1991,
           2025,
           35
         ]
       },
-      "sha256": "ca5e45435992948d62c0ffa56fe2f63c3991a8bf3c531ff989ac0caf1efde36b"
+      "sha256": "b1fbaec4ed7f0080ac79c46a5ec4e1842ce1f7e8362e681196704220f21189d0"
     },
     "grad_labor": {
       "source": "seed",

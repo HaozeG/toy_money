@@ -7,9 +7,10 @@
   ],
   "alignment": {
     "label": "working-age population share peak",
+    "rule": "workingage_peak",
     "anchors": {
-      "JPN": 1992,
-      "CHN": 2010
+      "CHN": 2010,
+      "JPN": 1992
     }
   },
   "findings": [

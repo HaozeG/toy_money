@@ -49,7 +49,7 @@ sub-1% CPI year" rule picks transient disinflation — JPN 1986 — and is rejec
 | **Japan Δ path** (t = 5 / 10 / 15 / 20) | property 84 / 72 / 56 / 54; household credit +1 / 0 / −6 / −6; **corporate credit −1 / −25 / −38 / −37**; gov debt +31 / +73 / +98 / +137 |
 | **China so far** (t = 4) | property **80** (−20%); household credit −1; **corporate credit +16** (still rising); gov debt +27 |
 | **Falsify "Japan-like"** | China's corporate-credit/GDP Δ path stays in the upper half of the post-bubble episode distribution through t≈7–8 (no private-sector deleveraging), i.e. China does not move toward the Japan/Nordic tail. Already observed at t=4: property (−20% vs Japan −16% at t=5) and public debt (+27 vs +31) sit near Japan; corporate credit (+16pp vs Japan −1pp at t=5) is at the opposite end — firms still levering while prices fall. |
-| **Comparators** | post-bubble set (countries): JPN, FIN, SWE, KOR, THA, USA, GBR, ESP, IRL. Anchor years are **not** set here — B2's first step runs `property_peak` over each country and records the year it selects. |
+| **Comparators** | post-bubble set (8): JPN 1991, FIN 1989, SWE 1990, USA 2006, GBR/ESP/IRL 2007, CHN 2021 — anchor years computed by `property_peak` (see `notes/coverage.md`). KOR/THA (Asian crisis) removed: a credit event, not a house-price peak. |
 
 ## 3. Deflation entrenchment
 
@@ -73,7 +73,7 @@ sub-1% CPI year" rule picks transient disinflation — JPN 1986 — and is rejec
 | **Japan Δ path** (t = 5 / 10 / 15 / 20) | youth unemployment +2.3 / +5.1 / +3.8 / +3.9 — rises for a decade (就職氷河期 1993–2005), partially recovers |
 | **China so far** (t = 4) | youth unemployment +3.4 (ILO-modelled; NBS 16–24 series has the 2023 break) — tracking the Japan rise, slightly steeper |
 | **Falsify "Japan-like"** | China's youth-unemployment Δ path peaks and reverts within t≈5 (staying in the lower half of the post-bubble episode distribution — no multi-year scarring cohort), or the graduate jobs-to-applicants ratio does not fall for a sustained stretch |
-| **Comparators** | post-bubble set (countries as in #2); add a jobs-to-applicants / graduate-placement series where a national one exists (KOR, USA at minimum). |
+| **Comparators** | post-bubble set as in #2; add a jobs-to-applicants / graduate-placement series where a national one exists (KOR, USA at minimum). |
 
 ---
 
@@ -96,7 +96,9 @@ comparison sharp.
 ## Review outcome (2026-09-10)
 
 All approved by the user:
-1. **Comparator set — keep all** (9 post-bubble, 6 working-age).
+1. **Comparator set — keep all**, then KOR/THA dropped from post-bubble after the
+   B2 dry run (Asian crisis = credit event, not a property-price peak). Post-bubble
+   is now 8; working-age 6 (TWN has no data, stays declared but unavailable).
 2. **Horizons N**: #1 demographic t=20, #2 balance-sheet t=20, #3 deflation t=20,
    #4 scarring t=10, mechanism row t=15.
 3. **`property_peak` keeps the ≥3-year-decline requirement.**

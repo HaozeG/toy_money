@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 from . import datastore, sources
-from .align import resolve_alignment
+from .align import anchor_year, resolve_alignment
 from .analysis import ANALYZERS
 from .config import (
     DATA_DIR,
@@ -193,11 +193,14 @@ def _cmd_coverage(args: argparse.Namespace) -> int:
                 cells.append(f"{int(g.year.min())}-{int(g.year.max()):>4}")
         print(f"{s.key:24} {prov:6} " + " ".join(cells))
     print()
-    print("Episodes and the window their anchor rule searches:")
+    print("Episode      rule             window       -> anchor year (or why not)")
     for e in EPISODES:
         lo, hi = e.search_window
-        mark = "" if e.iso3 in FETCH_COUNTRIES else "  (not in FETCH_COUNTRIES!)"
-        print(f"  {e.set_name:16} {e.iso3}  {e.anchor_rule:16} {lo}-{hi}  {e.label}{mark}")
+        res = anchor_year(e.iso3, e.anchor_rule, e.search_window)
+        got = str(res.year) if res.year is not None else f"— {res.reason}"
+        print(
+            f"  {e.set_name:15} {e.iso3}  {e.anchor_rule:16} {lo}-{hi}  ->  {got}"
+        )
     return 0
 
 

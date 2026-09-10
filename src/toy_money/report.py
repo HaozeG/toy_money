@@ -326,6 +326,7 @@ def write_side_outputs(
                 "analysis_window": list(ANALYSIS_WINDOW),
                 "alignment": {
                     "label": alignment.label,
+                    "rule": alignment.rule,
                     "anchors": alignment.anchors,
                 },
                 "findings": [asdict(f) for f in findings],

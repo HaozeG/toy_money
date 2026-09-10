@@ -37,7 +37,7 @@ _SPP_KEY = "Q.{cty}.R.628"
 # a coverage gap rather than raising.
 _ISO2 = {
     "CHN": "CN", "JPN": "JP", "FIN": "FI", "SWE": "SE", "KOR": "KR",
-    "THA": "TH", "USA": "US", "GBR": "GB", "ESP": "ES", "IRL": "IE",
+    "USA": "US", "GBR": "GB", "ESP": "ES", "IRL": "IE",
     "TWN": "TW", "DEU": "DE", "ITA": "IT",
 }
 

@@ -10,8 +10,6 @@ Full matrix: `toy-money coverage`. Per-country year spans: `cache_manifest.json`
 | JPN 1990s | property_peak | 1988–1994 | **1991** | yes | |
 | Finland | property_peak | 1987–1993 | **1989** | yes | |
 | Sweden | property_peak | 1987–1993 | **1990** | yes | |
-| Korea (Asian crisis) | property_peak | 1994–2001 | **1994** | yes | **picks window edge** — Korean real house prices were already falling into 1994; the 1997 crisis is a credit event more than a house-price-peak event. Needs a call (see below). |
-| Thailand | property_peak | 1994–2000 | **1995** | yes | near window edge; Thai property peaked ~1995–96 pre-crisis — acceptable |
 | US 2008 | property_peak | 2004–2009 | **2006** | yes | |
 | UK 2008 | property_peak | 2004–2009 | **2007** | yes | |
 | Spain 2008 | property_peak | 2004–2009 | **2007** | yes | |
@@ -24,7 +22,13 @@ Full matrix: `toy-money coverage`. Per-country year spans: `cache_manifest.json`
 | Italy | workingage_peak | 1988–1996 | **1992** | yes | |
 | China | workingage_peak | 2005–2015 | **2010** | yes | |
 
-15 of 16 episodes anchor cleanly. The rule is windowed argmax + ≥3-year real decline.
+The rule is windowed argmax + ≥3-year real decline.
+
+**Korea and Thailand removed from `post_bubble`** (user, 2026-09-10): `property_peak`
+landed on a window edge for both because the 1997 Asian crisis was a currency/credit
+event, not a house-price peak. KOR stays in the working-age set (anchors 2016).
+THA dropped from `FETCH_COUNTRIES` entirely. Post-bubble set is now JPN, FIN, SWE,
+USA, GBR, ESP, IRL, CHN (8).
 
 ## Indicator coverage gaps that bite
 
@@ -42,12 +46,7 @@ Full matrix: `toy-money coverage`. Per-country year spans: `cache_manifest.json`
   CHN/IRL.
 - **`gov_debt_gdp`** runs to 2031 (IMF projections); `MAX_YEAR` = 2025 clips them.
 
-## Open call for the reviewer
+## Resolved
 
-**Korea in the post-bubble set.** `property_peak` picks 1994 (window edge), not the
-1997 crisis year. Options: (a) drop KOR from `post_bubble` — the Asian crisis is a
-currency/credit episode, not a property-price-peak one; (b) keep KOR but anchor the
-post-bubble set on a *credit* peak rule instead of a property one; (c) accept 1994
-and let the distribution show KOR as a mild case. THA has the same shape, milder.
-Recommend (a) for now — cleaner than tuning windows — and revisit if the credit-peak
-rule gets built.
+- Korea / Thailand removed from `post_bubble` (see above). If a credit-peak anchor
+  rule is built later, the Asian-crisis episodes can be revisited on that basis.

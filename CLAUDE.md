@@ -184,10 +184,15 @@ Pipeline: `sources/*` fetch → `datastore` caches as parquet → `align` transf
   `cache_manifest.json` is single (provenance/rows/years/sha256 are pre-alignment).
 - **`gov_debt_gdp.definition_note`**: IMF `GGXWDG_NGDP` is not definition-comparable
   Japan-1990 vs China-now (LGFV / off-balance-sheet). Rendered with the panel.
-- **B1 checkpoint cleared** (user, 2026-09-10). Keep the full comparator set;
-  per-hypothesis horizons (#1/#2/#3 t=20, #4 t=10, mechanism t=15); `property_peak`
-  keeps the ≥3-year-decline requirement; B3 anchor rules replace hardcoded years and
-  `bubble_peak`'s JPN anchor moves 1990 → 1991. See `notes/hypotheses.md`.
+- **B1 checkpoint cleared** (user, 2026-09-10). Per-hypothesis horizons (#1/#2/#3
+  t=20, #4 t=10, mechanism t=15); `property_peak` keeps the ≥3-year-decline
+  requirement; B3 anchor rules replace hardcoded years and `bubble_peak`'s JPN
+  anchor moves 1990 → 1991. See `notes/hypotheses.md`.
+- **Post-bubble episode set = 8** (JPN, FIN, SWE, USA, GBR, ESP, IRL, CHN), after
+  the B2 dry run (user, 2026-09-10). KOR/THA dropped: `property_peak` hit a window
+  edge because the 1997 Asian crisis was a currency/credit event, not a house-price
+  peak. KOR stays in the working-age set. TWN stays declared but has no provider
+  data. See `notes/coverage.md`.
 - **Sector/fiscal is an in-scope source class** (user, 2026-09-10). Production/
   consumption split (WB keyless), land-sale revenue + civil-service intake
   (hand-seeded CSV). Links hypotheses #2 and #4. Individual company filings stay out.
