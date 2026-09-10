@@ -25,6 +25,10 @@ _COLOR = {"CHN": "#2a78d6", "JPN": "#eb6834"}
 # make the same claim about comparability.
 _VIEW_T = ANALYSIS_WINDOW
 
+# Below this many post-anchor years, an anchor's column is a snapshot of China's
+# current position, not a trajectory match — the report says so (decision 2 = D).
+SNAPSHOT_MIN_POST = 8
+
 
 def _panels(alignment: Alignment):
     return [(p.series, p.df, p.provenance) for p in prepared_panels(alignment)]
@@ -182,9 +186,11 @@ def _conclusions_html(
         None,
     )
     by_preset: dict[str, dict[str, str]] = {}
+    post_years: dict[str, int] = {}
     for name in presets:
         al = resolve_alignment(name)
         fs = findings if name == active else analyzer(prepared_panels(al), al)
+        post_years[name] = max((f.n_post for f in fs), default=0)
         for f in fs:
             by_preset.setdefault(f.key, {})[name] = f.direction
 
@@ -215,14 +221,30 @@ def _conclusions_html(
             f"<td style='text-align:right;padding:3px 8px'>{_num(f.chn_at_ref)}</td>"
             f"<td style='text-align:right;padding:3px 8px'>{_num(f.jpn_at_ref)}</td>"
             f"<td style='text-align:right;padding:3px 8px'>{fwd}</td>"
-            f"<td style='text-align:center;padding:3px 8px'>{f.n_post}</td>"
             f"{pres}</tr>"
         )
 
     body = "".join(row(f) for f in findings)
-    head = "".join(
-        f"<th style='padding:3px 8px'>{'<b>' + n + '</b>' if n == active else n}</th>"
-        for n in presets
+
+    def th(n: str) -> str:
+        yrs = post_years.get(n, 0)
+        label = f"{n}<br><span style='font-weight:400;color:#888'>{yrs}y post"
+        label += " · snapshot*" if yrs < SNAPSHOT_MIN_POST else ""
+        label += "</span>"
+        return (
+            f"<th style='padding:3px 8px'>"
+            f"{'<b>' + label + '</b>' if n == active else label}</th>"
+        )
+
+    head = "".join(th(n) for n in presets)
+    snapshot = [n for n in presets if post_years.get(n, 0) < SNAPSHOT_MIN_POST]
+    snapshot_note = (
+        f"<p style='color:#888;margin:6px 0 0'>* {', '.join(snapshot)}: China has "
+        f"only ~{post_years[snapshot[0]]} years past this anchor — read the column "
+        f"as where China sits now, not as a path match. A distribution of episodes "
+        f"(Phase B) is what tests position on short data.</p>"
+        if snapshot
+        else ""
     )
     indet = [f.label for f in findings if f.verdict == "indeterminate"]
     indet_note = (
@@ -238,17 +260,17 @@ def _conclusions_html(
         "<h2 style='margin:0 0 2px'>Conclusion</h2>"
         f"<p style='margin:0 0 4px'>{headline(findings)}.</p>"
         f"<p style='color:#666;margin:0 0 10px'>Method <code>{method}</code>; "
-        f"reference = China's latest year (t={ref_t}, {ref_year}). Columns: value "
-        "at that t for each country, Japan's value +10y from there, post-anchor "
-        "overlapping years, and China's direction vs. Japan under each anchor "
-        "(<b>bold</b> = this build). The chart shows the full paths.</p>"
+        f"reference = China's latest year (t={ref_t}, {ref_year}). Columns: value at "
+        "that t for China and Japan (this build), Japan's value 10y on, and China's "
+        "direction vs. Japan under each anchor (<b>bold</b> = this build; the year "
+        "count under each is China's post-anchor data). The chart shows the full "
+        "paths.</p>"
         "<table style='border-collapse:collapse;font-size:13px;margin-bottom:14px'>"
         "<tr><th style='padding:3px 8px;text-align:left'>indicator</th>"
         "<th style='padding:3px 8px'>China</th><th style='padding:3px 8px'>Japan</th>"
         "<th style='padding:3px 8px'>Japan +10y</th>"
-        "<th style='padding:3px 8px'>n post</th>"
         f"{head}</tr>"
-        f"{body}</table>{indet_note}"
+        f"{body}</table>{snapshot_note}{indet_note}"
         "</div><hr style='max-width:1100px;margin:18px auto;border:none;"
         "border-top:1px solid #ddd'>"
     )

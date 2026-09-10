@@ -6,9 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `toy_money` tests the question *"is this time really different, or does historical
 precedent still apply?"* against macro data. It is **hypothesis-testing against
-historical analogues, not backtesting** — there is no trading strategy. Phase 1 is a
-single vertical slice: **China now vs. Japan 1990s**, testing the claim that China is
-retracing Japan's post-bubble path.
+historical analogues, not backtesting** — there is no trading strategy.
+
+**Analytical frame (set by the user).** The target is not a bilateral "China vs.
+Japan on indicator X" comparison. It is **China's position within a space of
+comparable episodes** — post-property-bubble economies, working-age-peak economies —
+read against the *distribution* of those episodes, not matched to a single
+precedent. Japan is one point in that space. The `precedent` analyzer (China vs. one
+comparator) is a stepping stone; the `episodes` analyzer (Phase B4 — China's rank in
+a distribution of N episodes) is the real deliverable.
+
+Phase 1 slice: **China now vs. Japan 1990s**, one comparator, to get the pipeline
+right.
 
 ## Working rules
 
@@ -146,16 +155,23 @@ Pipeline: `sources/*` fetch → `datastore` caches as parquet → `align` transf
 
 ## Decisions
 
+- **Analytical frame = distribution, not bilateral** (user, 2026-09-10). China is
+  read against a space of comparable episodes; `precedent` (one comparator) is a
+  stepping stone to `episodes` (rank in a distribution). B1/B2 are framed this way.
+- **`MIN_POST = 3`, keep both anchor presets, mark thin ones as "snapshot"**
+  (decision 2 = D). `bubble_peak` gives China ~5 post-anchor years — the report
+  labels its column as a current-position snapshot, not a trajectory match.
+  B1 sets the real per-hypothesis window.
 - **`compare_as="slope"` = `log(value / value_at_anchor)`** — the trajectory compares;
   the anchor-level gap is recorded on the `Finding` (`level_gap_at_anchor`) and shown
   in the panel text. The GDP-per-capita chart panel is therefore a log-change
   trajectory, not "$ on a log axis". *Reason:* the config always said "the level gap
   is itself a finding"; this makes both true.
-- **`Series.band` is absolute, per series, in native units** (`gdp_growth` 0.5 pp,
-  `workingage_share` 0.3 pp, `cpi_inflation` 0.5 pp, `gov_debt_gdp` 3, `credit_hh_gdp`
-  2, `credit_nfc_gdp` 3, `real_property_prices` 3, `youth_unemployment` 1;
-  `gdp_pc_ppp` `None`). *Reason:* a relative band is scale-biased — the module's own
-  objection; a `crossing` call should mean "within revision noise of equal".
+- **`Series.band` absolute, per series** (decision 3 = A): `gdp_growth` 0.5 pp,
+  `workingage_share` 0.3, `cpi_inflation` 0.5, `gov_debt_gdp` 3, `credit_hh_gdp` 2,
+  `credit_nfc_gdp` 3, `real_property_prices` 3, `youth_unemployment` 1; `gdp_pc_ppp`
+  `None`. *Reason:* a relative band is scale-biased; "crossing" should mean "within
+  revision noise of equal" and is a real signal (lines level / crossing over).
 - **Verdict gate is `n_post >= MIN_POST`; `MIN_OVERLAP` deleted.** *Reason:* the
   hypothesis is about the post-anchor path, so pre-anchor overlap must not decide the
   verdict.
