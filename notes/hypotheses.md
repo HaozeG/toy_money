@@ -77,6 +77,25 @@ sub-1% CPI year" rule picks transient disinflation — JPN 1986 — and is rejec
 
 ---
 
+## Mechanism row (proposed 2026-09-10, pending review — from the user's next-step note)
+
+Not a fifth hypothesis. It is the **causal link between #2 and #4**: property-bubble
+unwind → local-government land-sale revenue falls → local fiscal capacity shrinks →
+public-sector's ability to absorb the graduate cohort weakens. Japan's post-1991
+public-sector absorption of the 就職氷河期 cohort is documented, which makes the
+comparison sharp.
+
+| | |
+|---|---|
+| **Anchor** | `property_peak` (shared with #2, #4) |
+| **Indicators / basis** | production/consumption split — gross capital formation, household consumption, industry-incl-construction VA, services VA (all % GDP, Δpp from anchor, WB keyless — **buildable now, no new adapter**); 国有土地使用权出让收入 / land-sale revenue (MoF 政府性基金预算, hand-seeded CSV); 国考报名人数 & JPN 公務員試験 applicants + 就職氷河期-era public hiring (hand-seeded) |
+| **Japan reference** | capital-formation share fell from its ~1990 peak while China's stayed elevated through the 2010s; public-sector hiring cushioned the 1993–2005 cohort |
+| **Falsify "Japan-like"** | China's land revenue stabilises within t≈4 **and** public-sector graduate intake holds → the fiscal-transmission channel did not bind the way it did in Japan |
+| **Data status** | WB series: append `Series(...)` + trigger `refresh-data.yml`, verify codes resolve on the runner. Land revenue / civil-service applicants: hand-seeded CSV with cited sources (extend `seed/`), same class as `grad_labor`. Individual developer filings (Evergrande/Vanke/…) = **out of scope** (equity-research filings pipeline; `credit_nfc_gdp` + land revenue already give sector health). |
+
+Recording the scope change as a Decision (new source class — sector/fiscal — beyond
+the current "additional countries or episodes" boundary) is part of approving this row.
+
 ## What B2–B4 turn this into
 
 - **B2** — `EPISODES` table in `config.py`: `(iso3, anchor_rule, label)` for the sets
