@@ -22,8 +22,21 @@ from dataclasses import dataclass, field
 
 import pandas as pd
 
-from .align import Alignment, align_series, apply_comparison_basis
-from .config import ANALYSIS_WINDOW, SERIES, Series
+import math
+
+import numpy as np
+
+from .align import Alignment, align_series, anchor_year, apply_comparison_basis
+from .config import (
+    ANALYSIS_WINDOW,
+    EPISODES,
+    HYPOTHESES,
+    MAX_YEAR,
+    SERIES,
+    SERIES_BY_KEY,
+    Series,
+    episode_window,
+)
 from . import datastore
 
 # Post-anchor overlapping years required before a direction is stated. The
@@ -201,6 +214,160 @@ def precedent(panels: list[PreparedPanel], alignment: Alignment) -> list[Finding
 
 
 ANALYZERS = {"precedent": precedent}
+
+
+# --- episodes: China's Δ-from-anchor against a distribution of episodes --------
+
+
+def _episode_trajectory(s: Series, iso3: str, anchor: int) -> dict[int, float] | str:
+    """{t: comparison-basis value} for one country/series from t=0 onward, or a
+    reason string if it can't be built.
+
+    `compare_as="slope"` -> log(value / value_at_anchor). Otherwise
+    `episode_basis` decides: "delta" -> Δ from the anchor value (level) or the
+    re-indexed change (indexed_to_anchor); "level" -> the value itself (flow
+    rates where the level is the point).
+    """
+    key = s.key
+    try:
+        raw = datastore.read(key)
+    except FileNotFoundError:
+        return f"no '{key}' cache"
+    g = raw[(raw["country"] == iso3) & (raw["year"] <= MAX_YEAR)].copy()
+    if g.empty:
+        return f"no '{key}' data for {iso3}"
+    g["t"] = g["year"].astype(int) - anchor
+    at0 = g[g["t"] == 0]
+    if at0.empty:
+        return f"no '{key}' observation at the anchor year {anchor}"
+    base = float(at0["value"].iloc[0])
+    slope = s.compare_as == "slope"
+    delta = s.episode_basis == "delta"
+    out: dict[int, float] = {}
+    for r in g.itertuples():
+        t = int(r.t)
+        if t < 0:
+            continue
+        v = float(r.value)
+        if slope:
+            if base <= 0 or v <= 0:
+                return f"'{key}' non-positive value; log-change undefined"
+            out[t] = math.log(v / base)
+        elif not delta:
+            out[t] = v
+        elif s.compare_as == "indexed_to_anchor":
+            if base == 0:
+                return f"'{key}' anchor value is 0"
+            out[t] = v / base * 100.0 - 100.0
+        else:  # level, delta
+            out[t] = v - base
+    return out
+
+
+@dataclass(frozen=True)
+class EpisodeFinding:
+    hypothesis: str
+    key: str
+    label: str
+    unit: str
+    compare_as: str
+    basis: str  # "log-change" | "delta from anchor" | "level" — how values read
+    horizon: int
+    # t -> {"n", "min", "q1", "median", "q3", "max", "episodes": {iso3: value}}
+    distribution: dict
+    chn: dict  # t -> China's Δ (only where China has a post-anchor observation)
+    chn_rank: dict  # t -> [k, n]  China is above k of n episode values
+    jpn: dict  # t -> Japan's Δ (Japan is also in the distribution)
+    unavailable: dict  # iso3 -> reason it is not in the distribution
+    provenance: str = "live"
+
+
+def episodes(panels: list[PreparedPanel], alignment: Alignment) -> list[EpisodeFinding]:
+    """China's Δ-from-anchor at each post-anchor year, against the distribution of
+    comparable episodes. Reads its own data per episode (each on its own computed
+    anchor) — `panels`/`alignment` are unused. No similarity verdict, no rank in
+    any headline: the Finding carries the numbers.
+    """
+    findings: list[EpisodeFinding] = []
+    for h in HYPOTHESES:
+        eps = [e for e in EPISODES if e.set_name == h.set_name]
+        # Resolve each episode's anchor once.
+        anchors: dict[str, int] = {}
+        anchor_gap: dict[str, str] = {}
+        for e in eps:
+            res = anchor_year(e.iso3, e.anchor_rule, e.search_window)
+            if res.year is None:
+                anchor_gap[e.iso3] = res.reason
+            else:
+                anchors[e.iso3] = res.year
+
+        for key in h.series:
+            s = SERIES_BY_KEY[key]
+            deltas: dict[str, dict[int, float]] = {}
+            unavailable = dict(anchor_gap)
+            for iso3, a in anchors.items():
+                d = _episode_trajectory(s, iso3, a)
+                if isinstance(d, str):
+                    unavailable[iso3] = d
+                else:
+                    deltas[iso3] = d
+
+            dist: dict[int, dict] = {}
+            chn: dict[int, float] = {}
+            chn_rank: dict[int, list] = {}
+            jpn: dict[int, float] = {}
+            for t in range(0, h.horizon + 1):
+                # Distribution = every episode with an observation at t, China
+                # included as the subject but reported separately.
+                others = {
+                    iso3: dd[t]
+                    for iso3, dd in deltas.items()
+                    if iso3 != "CHN" and t in dd
+                }
+                if len(others) >= 3:
+                    vals = np.array(sorted(others.values()), dtype=float)
+                    dist[t] = {
+                        "n": int(len(vals)),
+                        "min": float(vals.min()),
+                        "q1": float(np.percentile(vals, 25)),
+                        "median": float(np.median(vals)),
+                        "q3": float(np.percentile(vals, 75)),
+                        "max": float(vals.max()),
+                        "episodes": {k: round(v, 4) for k, v in others.items()},
+                    }
+                    if "JPN" in others:
+                        jpn[t] = round(others["JPN"], 4)
+                    cd = deltas.get("CHN", {})
+                    if t in cd:
+                        chn[t] = round(cd[t], 4)
+                        chn_rank[t] = [int((vals < cd[t]).sum()), int(len(vals))]
+            findings.append(
+                EpisodeFinding(
+                    hypothesis=h.name,
+                    key=key,
+                    label=s.label,
+                    unit=s.unit,
+                    compare_as=s.compare_as,
+                    basis=(
+                        "log-change"
+                        if s.compare_as == "slope"
+                        else "level"
+                        if s.episode_basis == "level"
+                        else "delta from anchor"
+                    ),
+                    horizon=h.horizon,
+                    distribution=dist,
+                    chn=chn,
+                    chn_rank=chn_rank,
+                    jpn=jpn,
+                    unavailable=unavailable,
+                    provenance=datastore.provenance(key),
+                )
+            )
+    return findings
+
+
+ANALYZERS["episodes"] = episodes
 
 
 def headline(findings: list[Finding]) -> str:

@@ -113,6 +113,13 @@ def _cmd_build(args: argparse.Namespace) -> int:
         overrides["JPN"] = args.anchor_jpn
     if args.anchor_chn:
         overrides["CHN"] = args.anchor_chn
+    if args.method == "episodes":
+        print(
+            "the 'episodes' analyzer is not a bilateral report; run "
+            "`toy-money episodes` instead",
+            file=sys.stderr,
+        )
+        return 2
     preset = None if overrides and not args.anchor else (args.anchor or DEFAULT_ANCHOR)
     try:
         alignment = resolve_alignment(preset, overrides or None)
@@ -204,6 +211,60 @@ def _cmd_coverage(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_episodes(args: argparse.Namespace) -> int:
+    """Run the `episodes` analyzer: China's Δ-from-anchor at each post-anchor year
+    against the distribution of comparable episodes. Prints a compact table and
+    writes artifacts/episodes.json.
+    """
+    import dataclasses
+    import json
+
+    from .analysis import episodes
+
+    findings = episodes([], None)
+    ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+    out = ARTIFACTS_DIR / "episodes.json"
+    out.write_text(
+        json.dumps(
+            {"findings": [dataclasses.asdict(f) for f in findings]},
+            indent=2,
+            default=str,
+        ),
+        encoding="utf-8",
+    )
+
+    last_hyp = None
+    for f in findings:
+        if f.hypothesis != last_hyp:
+            print(f"\n=== {f.hypothesis} (horizon t={f.horizon}) ===")
+            last_hyp = f.hypothesis
+        gap = ", ".join(f"{k}: {v}" for k, v in f.unavailable.items())
+        print(f"\n  {f.key} — {f.label} [{f.compare_as}]")
+        if gap:
+            print(f"    unavailable: {gap}")
+        shown = sorted(set(f.chn) | {f.horizon})
+        for t in shown:
+            d = f.distribution.get(t)
+            if not d:
+                continue
+            chn = f.chn.get(t)
+            rank = f.chn_rank.get(t)
+            chn_s = (
+                f"CHN {chn:+.1f} (>{rank[0]}/{rank[1]})"
+                if chn is not None and rank
+                else "CHN —"
+            )
+            jpn = f.jpn.get(t)
+            jpn_s = f"JPN {jpn:+.1f}" if jpn is not None else "JPN —"
+            print(
+                f"    t={t:2}  n={d['n']}  "
+                f"[{d['min']:+.1f} .. {d['median']:+.1f} .. {d['max']:+.1f}]  "
+                f"{chn_s}  {jpn_s}"
+            )
+    print(f"\nwrote {out}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="toy-money", description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -254,6 +315,13 @@ def main(argv: list[str] | None = None) -> int:
         "(shows which episodes have the data their anchor rule needs)",
     )
     pc.set_defaults(func=_cmd_coverage)
+
+    pe = sub.add_parser(
+        "episodes",
+        help="China's Δ-from-anchor vs the distribution of comparable episodes "
+        "(writes artifacts/episodes.json)",
+    )
+    pe.set_defaults(func=_cmd_episodes)
 
     args = p.parse_args(argv)
     return args.func(args)

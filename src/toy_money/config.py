@@ -84,6 +84,13 @@ class Series:
     # Rendered with the panel and in the caveats list whatever the data source;
     # for comparisons that are not definition-comparable across episodes.
     definition_note: str = ""
+    # How the `episodes` analyzer compares this indicator across episodes:
+    #   "delta" - Δ from the anchor-year value (stocks / ratios / indices:
+    #             debt/GDP, credit/GDP, property index, working-age share)
+    #   "level" - the value itself at each t (flow rates where the level is the
+    #             point, not its change: GDP growth, CPI inflation)
+    # `slope` series always compare as a log-change trajectory regardless.
+    episode_basis: str = "delta"
 
 
 SERIES: list[Series] = [
@@ -94,6 +101,7 @@ SERIES: list[Series] = [
         source="worldbank",
         params={"indicator": "NY.GDP.MKTP.KD.ZG"},
         band=0.5,
+        episode_basis="level",  # a growth rate: the level is the point, not its Δ
     ),
     Series(
         key="workingage_share",
@@ -119,6 +127,7 @@ SERIES: list[Series] = [
         source="worldbank",
         params={"indicator": "FP.CPI.TOTL.ZG"},
         band=0.5,
+        episode_basis="level",  # deflation entrenchment is about the level near/below 0
     ),
     Series(
         key="gov_debt_gdp",
@@ -285,14 +294,56 @@ EPISODES: list[Episode] = [
     Episode("CHN", "workingage_peak", (2005, 2015), "China", "workingage_peak"),
 ]
 
-# Per-hypothesis comparison horizon (years post-anchor), set at the B1 checkpoint.
-EPISODE_HORIZONS = {
-    "demographic": 20,
-    "balance_sheet": 20,
-    "deflation": 20,
-    "scarring": 10,
-    "mechanism": 15,
-}
+# A sub-hypothesis (notes/hypotheses.md) ties an episode set to the indicators it
+# is tested on and the post-anchor horizon set at the B1 checkpoint. The `episodes`
+# analyzer iterates these, not EPISODES directly.
+
+@dataclass(frozen=True)
+class Hypothesis:
+    name: str
+    set_name: str  # which EPISODES rows form the comparison distribution
+    series: tuple[str, ...]  # indicators, keys into SERIES_BY_KEY
+    horizon: int  # years post-anchor to compare over
+    label: str
+
+
+HYPOTHESES: list[Hypothesis] = [
+    Hypothesis(
+        "demographic",
+        "workingage_peak",
+        ("workingage_share", "gdp_pc_ppp", "gdp_growth"),
+        20,
+        "Demographic growth slowdown",
+    ),
+    Hypothesis(
+        "balance_sheet",
+        "post_bubble",
+        ("real_property_prices", "credit_hh_gdp", "credit_nfc_gdp", "gov_debt_gdp"),
+        20,
+        "Post-property-bubble balance-sheet recession",
+    ),
+    Hypothesis(
+        "deflation",
+        "post_bubble",
+        ("cpi_inflation",),
+        20,
+        "Deflation entrenchment",
+    ),
+    Hypothesis(
+        "scarring",
+        "post_bubble",
+        ("youth_unemployment",),
+        10,
+        "New-entrant labour-market scarring",
+    ),
+    Hypothesis(
+        "mechanism",
+        "post_bubble",
+        ("capital_formation_gdp", "hh_consumption_gdp", "industry_va_gdp", "services_va_gdp"),
+        15,
+        "Land-revenue / fiscal transmission (production–consumption split)",
+    ),
+]
 
 POST_BUBBLE_SET = "post_bubble"
 WORKINGAGE_SET = "workingage_peak"
