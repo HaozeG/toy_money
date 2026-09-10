@@ -7,9 +7,10 @@ name: refresh-data
 #
 # This run is the live integration test for sources/*.py: it fetches every
 # provider-backed series, exercises BIS dimension validation against the live
-# SDMX CSV, and then runs tests/test_live_vs_seed.py to catch a key that parsed
-# but selected the wrong series. Adding a new BIS flow still needs a human check
-# (`toy-money verify`).
+# SDMX CSV, and then runs tests/test_live_vs_seed.py as a regression guard
+# (live values must not drift from the committed seed snapshot). It does NOT
+# check that a key was right to begin with — that is a human check per series
+# (`toy-money verify` against stats.bis.org).
 
 on:
   workflow_dispatch:
@@ -37,7 +38,7 @@ jobs:
           uv run toy-money fetch --force 2>&1 | tee fetch.log
           echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
 
-      - name: Live vs seed (wrong-key signal, not a network signal)
+      - name: Live vs seed snapshot (regression guard — provider revision or code/key change)
         id: livecheck
         if: always()
         run: |
@@ -52,7 +53,7 @@ jobs:
             echo '## Data refresh result'
             echo
             echo "fetch exit code: \`${{ steps.fetch.outputs.exit_code }}\` (non-zero = at least one source degraded to seed)"
-            echo "live-vs-seed exit code: \`${{ steps.livecheck.outputs.exit_code }}\` (non-zero = a live series disagrees with the hand-checked seed — likely wrong BIS key)"
+            echo "live-vs-seed exit code: \`${{ steps.livecheck.outputs.exit_code }}\` (non-zero = a live series drifted from the committed seed snapshot — a provider revision or a code/key change; look, do not ignore)"
             echo
             echo '```'
             cat fetch.log

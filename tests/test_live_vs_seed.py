@@ -1,12 +1,18 @@
-"""Live-fetched values vs. the bundled seed snapshot.
+"""Regression guard: live-fetched values vs. the committed seed snapshot.
 
-An Action fetch exiting 0 means HTTP succeeded and rows parsed — it does *not*
-prove the BIS SDMX key selected the intended series. This test compares the live
-parquet against the hand-checked seed at overlapping (country, year) points; a
-failure here is a wrong-key / wrong-series signal, not a network signal.
+What it catches: a provider silently rebasing or revising a series, or a change
+to `sources/*` / `config.py` that shifts what a key returns. On such a change the
+live parquet drifts from `seed/seed.csv` (a snapshot of an earlier fetch) past the
+tolerance and the run fails — a signal to look, not a network error.
 
-Skips cleanly when there is no live cache (`data/` absent), so it is a no-op in
-the default CI and locally until `toy-money pull-cache` has run.
+What it does NOT catch: a key that was wrong from the start. The seed is produced
+by the same fetch code with the same keys, so an always-wrong key sits in both
+sides and passes. The dimension *choice* is checked once per series by
+`toy-money verify` (a human against stats.bis.org); the *values echoed back* are
+checked every fetch by `sources/bis.py`.
+
+Skips when there is no live cache (`data/` absent) — a no-op in the default CI and
+locally until `toy-money pull-cache` has run; wired into `refresh-data.yml`.
 """
 
 from __future__ import annotations
@@ -44,8 +50,8 @@ pytestmark = pytest.mark.skipif(
 
 
 @pytest.mark.parametrize("series", _LIVE or SERIES[:1], ids=lambda s: s.key)
-def test_live_matches_seed(series):
-    live = datastore.read(series.key)  # parquet (has() was true in the filter)
+def test_live_matches_snapshot(series):
+    live = datastore.read(series.key)  # parquet (provenance was "live" in the filter)
     seed = datastore.seed_frame(series.key)
     merged = live.merge(
         seed, on=["country", "year"], suffixes=("_live", "_seed"), how="inner"
@@ -62,7 +68,7 @@ def test_live_matches_seed(series):
         ]
 
     assert len(bad) <= _MAX_OUTLIERS, (
-        f"{series.key}: {len(bad)} of {len(merged)} points disagree beyond "
-        f"tolerance — possible wrong series/key:\n"
+        f"{series.key}: {len(bad)} of {len(merged)} points drifted from the seed "
+        f"snapshot beyond tolerance — a provider revision or a code/key change:\n"
         + bad[["country", "year", "value_live", "value_seed"]].to_string(index=False)
     )

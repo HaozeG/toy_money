@@ -37,7 +37,7 @@ uv run toy-money build --anchor workingage_peak     # alternate alignment
 uv run toy-money build --anchor-jpn 1991 --anchor-chn 2021   # explicit anchors
 uv run toy-money build --method precedent           # pick the analysis method
 uv run pytest -q                         # all tests
-uv run pytest tests/test_live_vs_seed.py -q         # live parquet vs seed (skips without a live cache)
+uv run pytest tests/test_live_vs_seed.py -q         # regression guard: live vs committed seed snapshot (skips without a live cache)
 ```
 
 ## Network / firewall
