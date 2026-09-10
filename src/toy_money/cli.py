@@ -256,10 +256,17 @@ def _cmd_episodes(args: argparse.Namespace) -> int:
             )
             jpn = f.jpn.get(t)
             jpn_s = f"JPN {jpn:+.1f}" if jpn is not None else "JPN —"
+            # The set thins as t grows (MAX_YEAR: only the oldest episodes reach
+            # t=20). Below 5 it is too few to read as a distribution — name them.
+            thin = (
+                f"  thin: {{{', '.join(sorted(d['episodes']))}}}"
+                if d["n"] < 5
+                else ""
+            )
             print(
                 f"    t={t:2}  n={d['n']}  "
                 f"[{d['min']:+.1f} .. {d['median']:+.1f} .. {d['max']:+.1f}]  "
-                f"{chn_s}  {jpn_s}"
+                f"{chn_s}  {jpn_s}{thin}"
             )
     print(f"\nwrote {out}")
     return 0

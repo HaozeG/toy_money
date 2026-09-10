@@ -196,6 +196,18 @@ Pipeline: `sources/*` fetch → `datastore` caches as parquet → `align` transf
 - **Sector/fiscal is an in-scope source class** (user, 2026-09-10). Production/
   consumption split (WB keyless), land-sale revenue + civil-service intake
   (hand-seeded CSV). Links hypotheses #2 and #4. Individual company filings stay out.
+- **`Series.episode_basis`**: `episodes` compares stocks/ratios/indices as Δ from
+  the anchor, but flow rates (`gdp_growth`, `cpi_inflation`) as the level itself —
+  the change in a growth rate is not the quantity of interest.
+- **`config.HYPOTHESES` is the `episodes` iteration unit**, not `EPISODES`: a
+  sub-hypothesis binds an episode set to its indicators and its B1 horizon
+  (`post_bubble` carries three different horizons across #2/#3/#4).
+- **`episodes` needs ≥3 comparison episodes at a t** to report a distribution;
+  `MAX_YEAR` thins the set at long horizons (only pre-2000 episodes reach t=20).
+  The printout names the episodes on any row with n<5.
+- **`episodes` is CLI-only** (`toy-money episodes` → `artifacts/episodes.json`),
+  not wired into `build`: it is not a bilateral report and the HTML report path is
+  precedent-shaped. `build --method episodes` points to the command.
 
 ## Scope boundary (Phase 1)
 
