@@ -77,7 +77,7 @@ sub-1% CPI year" rule picks transient disinflation — JPN 1986 — and is rejec
 
 ---
 
-## Mechanism row (proposed 2026-09-10, pending review — from the user's next-step note)
+## Mechanism row (approved 2026-09-10 — from the user's next-step note)
 
 Not a fifth hypothesis. It is the **causal link between #2 and #4**: property-bubble
 unwind → local-government land-sale revenue falls → local fiscal capacity shrinks →
@@ -93,8 +93,19 @@ comparison sharp.
 | **Falsify "Japan-like"** | China's land revenue stabilises within t≈4 **and** public-sector graduate intake holds → the fiscal-transmission channel did not bind the way it did in Japan |
 | **Data status** | WB series: append `Series(...)` + trigger `refresh-data.yml`, verify codes resolve on the runner. Land revenue / civil-service applicants: hand-seeded CSV with cited sources (extend `seed/`), same class as `grad_labor`. Individual developer filings (Evergrande/Vanke/…) = **out of scope** (equity-research filings pipeline; `credit_nfc_gdp` + land revenue already give sector health). |
 
-Recording the scope change as a Decision (new source class — sector/fiscal — beyond
-the current "additional countries or episodes" boundary) is part of approving this row.
+## Review outcome (2026-09-10)
+
+All approved by the user:
+1. **Comparator set — keep all** (9 post-bubble, 6 working-age).
+2. **Horizons N**: #1 demographic t=20, #2 balance-sheet t=20, #3 deflation t=20,
+   #4 scarring t=10, mechanism row t=15.
+3. **`property_peak` keeps the ≥3-year-decline requirement.**
+4. **Anchor rules replace hardcoded years in B3** — JPN property anchor moves
+   1990 → 1991 (the year the rule selects); `bubble_peak` preset updated to match.
+5. **Mechanism row accepted**; sector/fiscal data (capital formation, land revenue,
+   civil-service intake) is a new in-scope source class.
+
+B1 checkpoint cleared → B2/B3/B4 may proceed.
 
 ## What B2–B4 turn this into
 
